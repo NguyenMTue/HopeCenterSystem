@@ -1,0 +1,21 @@
+﻿<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+
+    <!-- vẫn giữ strict build -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <!-- Cho phép các warning này KHÔNG biến thành error -->
+    <WarningsNotAsErrors>
+      NU1608;
+      NU1902;
+      NU1903;
+      NU1904;
+      NU1905
+    </WarningsNotAsErrors>
+
+    <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>
