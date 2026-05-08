@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using backend.Domain.Entities;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using backend.Application.Common.Interfaces;
@@ -33,29 +34,46 @@ public class ApplicationDbContext : IdentityDbContext<Account, Role, Guid>
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
-        base.OnModelCreating(builder); // Bắt buộc phải có để Identity hoạt động
+        base.OnModelCreating(builder); // Bắt buộc giữ dòng này ở đầu
 
-        // Cấu hình cụ thể cho TaskAssignment để giải quyết xung đột quan hệ kép
+        // 1. Đổi tên các bảng Identity để khớp với thiết kế sạch
+        builder.Entity<Account>().ToTable("Accounts");
+        builder.Entity<Role>().ToTable("Roles");
+        builder.Entity<IdentityUserRole<Guid>>().ToTable("AccountRoles");
+        builder.Entity<IdentityUserClaim<Guid>>().ToTable("AccountClaims");
+        builder.Entity<IdentityUserLogin<Guid>>().ToTable("AccountLogins");
+        builder.Entity<IdentityRoleClaim<Guid>>().ToTable("RoleClaims");
+        builder.Entity<IdentityUserToken<Guid>>().ToTable("AccountTokens");
+
+        // 2. Cấu hình quan hệ 1-1 giữa Account và Employee/Adopter
+        // Một Account có thể là một Employee hoặc không, nhưng một Employee bắt buộc có một Account
+        builder.Entity<Employee>()
+            .HasOne(e => e.Account)
+            .WithOne(a => a.Employee)
+            .HasForeignKey<Employee>(e => e.AccountId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<Adopter>()
+            .HasOne(ad => ad.Account)
+            .WithOne(a => a.Adopter)
+            .HasForeignKey<Adopter>(ad => ad.AccountId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // 3. Cấu hình TaskAssignment (Bạn đã làm đúng, giữ lại)
         builder.Entity<TaskAssignment>(entity =>
         {
-            // Mối quan hệ với người giao việc (Assigner)
             entity.HasOne(ta => ta.Assigner)
                 .WithMany(e => e.AssignedTasks)
                 .HasForeignKey(ta => ta.AssignerId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Mối quan hệ với người nhận việc (Assignee)
             entity.HasOne(ta => ta.Assignee)
                 .WithMany(e => e.ReceivedTasks)
                 .HasForeignKey(ta => ta.AssigneeId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
-        // Tự động áp dụng các cấu hình từ các class thực thi IEntityTypeConfiguration
+        // 4. Áp dụng các cấu hình khác từ Assembly
         builder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
-
-        // Đổi tên bảng Identity
-        builder.Entity<Account>().ToTable("Accounts");
-        builder.Entity<Role>().ToTable("Roles");
     }
 }

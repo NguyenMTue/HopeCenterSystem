@@ -1,4 +1,4 @@
-using HopeCenterSystem.Shared;
+using backend.Shared;
 
 var builder = DistributedApplication.CreateBuilder(args);
 

@@ -9,11 +9,11 @@ using backend.Infrastructure.Data;
 
 #nullable disable
 
-namespace backend.Infrastructure.Migrations
+namespace backend.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260503111209_InitialCreateV2")]
-    partial class InitialCreateV2
+    [Migration("20260508143223_InitialIdentity")]
+    partial class InitialIdentity
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -46,7 +46,7 @@ namespace backend.Infrastructure.Migrations
 
                     b.HasIndex("RoleId");
 
-                    b.ToTable("AspNetRoleClaims", (string)null);
+                    b.ToTable("RoleClaims", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<System.Guid>", b =>
@@ -70,7 +70,7 @@ namespace backend.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("AspNetUserClaims", (string)null);
+                    b.ToTable("AccountClaims", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<System.Guid>", b =>
@@ -91,7 +91,7 @@ namespace backend.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("AspNetUserLogins", (string)null);
+                    b.ToTable("AccountLogins", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<System.Guid>", b =>
@@ -106,7 +106,7 @@ namespace backend.Infrastructure.Migrations
 
                     b.HasIndex("RoleId");
 
-                    b.ToTable("AspNetUserRoles", (string)null);
+                    b.ToTable("AccountRoles", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<System.Guid>", b =>
@@ -125,7 +125,7 @@ namespace backend.Infrastructure.Migrations
 
                     b.HasKey("UserId", "LoginProvider", "Name");
 
-                    b.ToTable("AspNetUserTokens", (string)null);
+                    b.ToTable("AccountTokens", (string)null);
                 });
 
             modelBuilder.Entity("backend.Domain.Entities.Account", b =>
@@ -177,9 +177,6 @@ namespace backend.Infrastructure.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("bit");
 
-                    b.Property<Guid?>("RoleId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
@@ -200,8 +197,6 @@ namespace backend.Infrastructure.Migrations
                         .HasDatabaseName("UserNameIndex")
                         .HasFilter("[NormalizedUserName] IS NOT NULL");
 
-                    b.HasIndex("RoleId");
-
                     b.ToTable("Accounts", (string)null);
                 });
 
@@ -211,7 +206,7 @@ namespace backend.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("AccountId")
+                    b.Property<Guid>("AccountId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Address")
@@ -248,8 +243,7 @@ namespace backend.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId")
-                        .IsUnique()
-                        .HasFilter("[AccountId] IS NOT NULL");
+                        .IsUnique();
 
                     b.HasIndex("IDCard")
                         .IsUnique();
@@ -411,7 +405,7 @@ namespace backend.Infrastructure.Migrations
                     b.Property<Guid?>("ApproverId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("ChildId")
+                    b.Property<Guid>("ChildId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("Created")
@@ -520,7 +514,7 @@ namespace backend.Infrastructure.Migrations
                     b.Property<Guid?>("ChangedById")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("ChildId")
+                    b.Property<Guid>("ChildId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("Created")
@@ -649,7 +643,7 @@ namespace backend.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("AccountId")
+                    b.Property<Guid>("AccountId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("Created")
@@ -684,8 +678,7 @@ namespace backend.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId")
-                        .IsUnique()
-                        .HasFilter("[AccountId] IS NOT NULL");
+                        .IsUnique();
 
                     b.ToTable("Employees");
                 });
@@ -877,7 +870,7 @@ namespace backend.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("AccountId")
+                    b.Property<Guid>("AccountId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("Created")
@@ -982,10 +975,6 @@ namespace backend.Infrastructure.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
-                    b.Property<string>("RoleName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedName")
@@ -1038,7 +1027,7 @@ namespace backend.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("AccountId")
+                    b.Property<Guid>("AccountId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Action")
@@ -1170,20 +1159,13 @@ namespace backend.Infrastructure.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("backend.Domain.Entities.Account", b =>
-                {
-                    b.HasOne("backend.Domain.Entities.Role", "Role")
-                        .WithMany("Accounts")
-                        .HasForeignKey("RoleId");
-
-                    b.Navigation("Role");
-                });
-
             modelBuilder.Entity("backend.Domain.Entities.Adopter", b =>
                 {
                     b.HasOne("backend.Domain.Entities.Account", "Account")
                         .WithOne("Adopter")
-                        .HasForeignKey("backend.Domain.Entities.Adopter", "AccountId");
+                        .HasForeignKey("backend.Domain.Entities.Adopter", "AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Account");
                 });
@@ -1232,7 +1214,9 @@ namespace backend.Infrastructure.Migrations
 
                     b.HasOne("backend.Domain.Entities.Child", "Child")
                         .WithMany("CarePlans")
-                        .HasForeignKey("ChildId");
+                        .HasForeignKey("ChildId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Approver");
 
@@ -1256,7 +1240,9 @@ namespace backend.Infrastructure.Migrations
 
                     b.HasOne("backend.Domain.Entities.Child", "Child")
                         .WithMany("StatusHistories")
-                        .HasForeignKey("ChildId");
+                        .HasForeignKey("ChildId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("ChangedBy");
 
@@ -1282,7 +1268,9 @@ namespace backend.Infrastructure.Migrations
                 {
                     b.HasOne("backend.Domain.Entities.Account", "Account")
                         .WithOne("Employee")
-                        .HasForeignKey("backend.Domain.Entities.Employee", "AccountId");
+                        .HasForeignKey("backend.Domain.Entities.Employee", "AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Account");
                 });
@@ -1330,7 +1318,9 @@ namespace backend.Infrastructure.Migrations
                 {
                     b.HasOne("backend.Domain.Entities.Account", "Account")
                         .WithMany("Notifications")
-                        .HasForeignKey("AccountId");
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Account");
                 });
@@ -1354,7 +1344,9 @@ namespace backend.Infrastructure.Migrations
                 {
                     b.HasOne("backend.Domain.Entities.Account", "Account")
                         .WithMany("SystemLogs")
-                        .HasForeignKey("AccountId");
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Account");
                 });
@@ -1446,11 +1438,6 @@ namespace backend.Infrastructure.Migrations
             modelBuilder.Entity("backend.Domain.Entities.InventoryItem", b =>
                 {
                     b.Navigation("InventoryTransactions");
-                });
-
-            modelBuilder.Entity("backend.Domain.Entities.Role", b =>
-                {
-                    b.Navigation("Accounts");
                 });
 
             modelBuilder.Entity("backend.Domain.Entities.Room", b =>

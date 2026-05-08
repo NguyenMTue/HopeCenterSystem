@@ -1,6 +1,6 @@
 ﻿using System.Reflection;
 
-namespace HopeCenterSystem.Web.Infrastructure;
+namespace backend.Web.Infrastructure;
 
 public static class MethodInfoExtensions
 {

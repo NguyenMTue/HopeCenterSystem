@@ -2,7 +2,7 @@ using Microsoft.Data.Sqlite;
 using Respawn;
 using System.Data.Common;
 
-namespace HopeCenterSystem.Application.FunctionalTests.Infrastructure;
+namespace backend.Application.FunctionalTests.Infrastructure;
 
 internal sealed class DatabaseResetter : IAsyncDisposable
 {

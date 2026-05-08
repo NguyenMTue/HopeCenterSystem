@@ -1,4 +1,4 @@
-namespace HopeCenterSystem.Web.AcceptanceTests.StepDefinitions;
+namespace backend.Web.AcceptanceTests.StepDefinitions;
 
 [Binding]
 public sealed class CounterStepDefinitions(CounterPage counterPage)

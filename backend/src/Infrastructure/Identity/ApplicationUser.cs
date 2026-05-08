@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Identity;
 
-namespace HopeCenterSystem.Infrastructure.Identity;
+namespace backend.Infrastructure.Identity;
 
 public class ApplicationUser : IdentityUser
 {

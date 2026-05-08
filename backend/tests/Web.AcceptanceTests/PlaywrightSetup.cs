@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace HopeCenterSystem.Web.AcceptanceTests;
+namespace backend.Web.AcceptanceTests;
 
 [SetUpFixture]
 public class PlaywrightSetup

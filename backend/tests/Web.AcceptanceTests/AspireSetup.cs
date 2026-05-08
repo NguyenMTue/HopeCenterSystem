@@ -1,6 +1,6 @@
 using Aspire.Hosting;
 
-namespace HopeCenterSystem.Web.AcceptanceTests;
+namespace backend.Web.AcceptanceTests;
 
 [SetUpFixture]
 public class AspireSetup
