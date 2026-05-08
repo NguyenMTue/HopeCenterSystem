@@ -1,4 +1,4 @@
-namespace HopeCenterSystem.Web.AcceptanceTests.Pages;
+namespace backend.Web.AcceptanceTests.Pages;
 
 public class LoginPage(IPage page) : BasePage(page)
 {

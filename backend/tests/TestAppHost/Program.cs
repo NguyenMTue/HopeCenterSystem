@@ -1,6 +1,6 @@
-using HopeCenterSystem.Shared;
+using backend.Shared;
 
-namespace HopeCenterSystem.TestAppHost;
+namespace backend.TestAppHost;
 
 public class Program
 {

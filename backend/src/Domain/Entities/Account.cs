@@ -1,21 +1,22 @@
-using backend.Domain.Common;
 using Microsoft.AspNetCore.Identity;
 
 namespace backend.Domain.Entities;
 
 public class Account : IdentityUser<Guid>
 {
-    // public Guid Id { get; set; }
-    // public string Username { get; set; } = null!;
-    public Guid? RoleId { get; set; }
+    // Giữ lại các trường custom mà IdentityUser không có
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-    public virtual Role? Role { get; set; }
+    // QUAN TRỌNG: Đã bỏ RoleId và virtual Role.
+    // Việc phân quyền giờ được quản lý qua bảng trung gian AspNetUserRoles.
+
+    // Giữ các liên kết 1-1 tới thông tin chi tiết
     public virtual Employee? Employee { get; set; }
     public virtual Adopter? Adopter { get; set; }
+
+    // Giữ các liên kết nghiệp vụ khác
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
     public virtual ICollection<SystemLog> SystemLogs { get; set; } = new List<SystemLog>();
-    // Bổ sung vào phần danh sách liên kết
     public virtual ICollection<ChildStatusHistory> StatusChanges { get; set; } = new List<ChildStatusHistory>();
 }

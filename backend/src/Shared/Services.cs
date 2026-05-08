@@ -1,4 +1,4 @@
-﻿namespace HopeCenterSystem.Shared;
+﻿namespace backend.Shared;
 
 public static class Services
 {

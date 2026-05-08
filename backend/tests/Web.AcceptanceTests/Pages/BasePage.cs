@@ -1,4 +1,4 @@
-namespace HopeCenterSystem.Web.AcceptanceTests.Pages;
+namespace backend.Web.AcceptanceTests.Pages;
 
 public abstract class BasePage(IPage page)
 {

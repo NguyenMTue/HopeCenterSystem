@@ -49,6 +49,12 @@ public static class DependencyInjection
             options.Password.RequireUppercase = false;
         });
 
+        builder.Services.AddAuthorization(options =>
+        {
+            // Bạn có thể định nghĩa các Policy ở đây nếu cần mở rộng phân quyền sâu hơn
+            options.AddPolicy("CanPurge", policy => policy.RequireRole("Administrator"));
+        });
+
         builder.Services.AddScoped<ApplicationDbContextInitialiser>();
 
         // builder.Services.AddAuthentication(options =>

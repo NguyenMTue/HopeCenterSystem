@@ -1,4 +1,4 @@
-namespace HopeCenterSystem.Web.Infrastructure;
+namespace backend.Web.Infrastructure;
 
 /// <summary>
 /// Defines a group of related Minimal API endpoints.

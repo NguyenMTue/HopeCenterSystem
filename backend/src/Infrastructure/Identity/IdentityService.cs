@@ -35,7 +35,9 @@ public class IdentityService : IIdentityService
         var user = new Account
         {
             UserName = userName,
-            Email = userName,
+            Email = userName, // Nếu userName là 'admin', email cũng sẽ là 'admin' (không hợp lệ định dạng email)
+            IsActive = true,   // Trường custom chúng ta đã thêm vào Account.cs
+            CreatedAt = DateTime.UtcNow
         };
 
         var result = await _userManager.CreateAsync(user, password);

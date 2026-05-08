@@ -1,18 +1,20 @@
 using backend.Domain.Common;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace backend.Domain.Entities;
 
 public class Employee : BaseAuditableEntity
 {
 
-    public Guid? AccountId { get; set; }
+    public Guid AccountId { get; set; }
     public string FullName { get; set; } = null!;
     public DateTime? DOB { get; set; }
     public string? Phone { get; set; }
     public string? Position { get; set; }
     public bool IsDeleted { get; set; } = false;
 
-    public virtual Account? Account { get; set; }
+    [ForeignKey("AccountId")]
+    public virtual Account Account { get; set; } = null!;
     public virtual ICollection<CarePlan> ApprovedCarePlans { get; set; } = new List<CarePlan>();
     public virtual ICollection<CareLog> CareLogs { get; set; } = new List<CareLog>();
     public virtual ICollection<Incident> ReportedIncidents { get; set; } = new List<Incident>();

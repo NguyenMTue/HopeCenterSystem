@@ -1,4 +1,4 @@
-namespace HopeCenterSystem.Web.AcceptanceTests.Pages;
+namespace backend.Web.AcceptanceTests.Pages;
 
 public class CounterPage(IPage page) : BasePage(page)
 {

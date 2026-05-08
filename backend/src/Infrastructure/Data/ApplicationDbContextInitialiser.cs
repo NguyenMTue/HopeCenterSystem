@@ -66,16 +66,23 @@ public class ApplicationDbContextInitialiser
         // ==========================================
         // 1. TẠO CÁC ROLE MẶC ĐỊNH
         // ==========================================
-        var roles = new List<string> { "Administrator", "Director", "Manager", "CareGiver", "Adopter" }; // admin giám đóc quanly nhanvien nguoinhannuoi
-        foreach (var roleName in roles)
+        var roles = new List<(string Name, string Description)> 
+        { 
+            ("Administrator", "Quản trị hệ thống"), 
+            ("Director", "Giám đốc trung tâm"), 
+            ("Manager", "Quản lý phòng ban"), 
+            ("CareGiver", "Nhân viên chăm sóc"), 
+            ("Adopter", "Người nhận nuôi") 
+        };
+
+        foreach (var roleInfo in roles)
         {
-            if (_roleManager.Roles.All(r => r.Name != roleName))
+            if (!await _roleManager.RoleExistsAsync(roleInfo.Name))
             {
-                // Vì Role của chúng ta có custom thêm trường RoleName, nên gán cả 2
                 await _roleManager.CreateAsync(new Role 
                 { 
-                    Name = roleName, 
-                    RoleName = roleName 
+                    Name = roleInfo.Name, 
+                    Description = roleInfo.Description // Sử dụng trường mở rộng bạn đã giữ lại
                 });
             }
         }
@@ -94,7 +101,7 @@ public class ApplicationDbContextInitialiser
             _context.Employees.Add(new Employee
             {
                 AccountId = adminAccount.Id,
-                FullName = "Trần Trọng Đạt",
+                FullName = "Nguyễn Minh Tuệ",
                 Position = "Quản trị hệ thống",
                 Phone = "0988123456",
                 DOB = new DateTime(1980, 5, 15)
