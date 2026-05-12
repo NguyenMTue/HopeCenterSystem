@@ -7,7 +7,7 @@ using backend.Application.Common.Interfaces;
 
 namespace backend.Infrastructure.Data;
 
-public class ApplicationDbContext : IdentityDbContext<Account, Role, Guid>
+public class ApplicationDbContext : IdentityDbContext<Account, Role, Guid>, IApplicationDbContext
 {
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 

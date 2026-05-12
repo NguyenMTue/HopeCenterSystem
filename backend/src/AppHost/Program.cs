@@ -5,7 +5,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 builder.AddAzureContainerAppEnvironment("aca-env");
 
 var databaseServer = builder
-    .AddSqlite(Services.Database);
+    .AddSqlServer(Services.Database)
+    .AddDatabase("DefaultConnection");
 
 var web = builder.AddProject<Projects.Web>(Services.WebApi)
     .WithReference(databaseServer)

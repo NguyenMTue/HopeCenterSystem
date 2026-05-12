@@ -28,11 +28,16 @@ public static class DependencyInjection
         builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
         {
             options.AddInterceptors(sp.GetServices<ISaveChangesInterceptor>());
-            // Bạn có thể đổi sang UseSqlServer nếu dùng SQL Server
-            options.UseSqlServer(connectionString,
-                builder => builder.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName));
+            // Sử dụng SQL Server với khả năng tự phục hồi lỗi kết nối tạm thời
+            options.UseSqlServer(connectionString, builder =>
+            {
+                builder.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName);
+                builder.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null);
+            });
             options.ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
         });
+
+        builder.Services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
 
         // 2. Cấu hình Identity thống nhất sử dụng Account và Role
         builder.Services.AddIdentityApiEndpoints<Account>() // Đã bao gồm AddIdentityCore, AddApiEndpoints và cấu hình Cookies
@@ -47,6 +52,11 @@ public static class DependencyInjection
             options.Password.RequiredLength = 6;
             options.Password.RequireNonAlphanumeric = false;
             options.Password.RequireUppercase = false;
+            
+            // Thêm các dòng này để nới lỏng xác thực
+            options.SignIn.RequireConfirmedAccount = false;
+            options.SignIn.RequireConfirmedEmail = false;
+            options.SignIn.RequireConfirmedPhoneNumber = false;
         });
 
         builder.Services.AddAuthorization(options =>
