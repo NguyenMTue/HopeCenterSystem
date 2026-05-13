@@ -8,6 +8,7 @@ public class DonationAllocations : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
+        groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetDonationAllocations, "");
         groupBuilder.MapPost(CreateDonationAllocation, "");
     }

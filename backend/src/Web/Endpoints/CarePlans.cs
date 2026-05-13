@@ -11,6 +11,7 @@ public class CarePlans : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
+        groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetCarePlans, "");
         groupBuilder.MapPost(CreateCarePlan, "");
         groupBuilder.MapPut(UpdateCarePlan, "{id}");

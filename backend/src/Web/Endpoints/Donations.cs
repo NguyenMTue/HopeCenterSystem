@@ -2,8 +2,8 @@ using backend.Application.Donations.Commands.CreateDonation;
 using backend.Application.Donations.Commands.DeleteDonation;
 using backend.Application.Donations.Commands.UpdateDonation;
 using backend.Application.Donations.Queries.GetDonations;
+using backend.Application.Common.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.AspNetCore.Http;
 
 namespace backend.Web.Endpoints;
 
@@ -11,15 +11,16 @@ public class Donations : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
+        groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetDonations, "");
         groupBuilder.MapPost(CreateDonation, "");
         groupBuilder.MapPut(UpdateDonation, "{id}");
         groupBuilder.MapDelete(DeleteDonation, "{id}");
     }
 
-    public static async Task<Ok<DonationsVm>> GetDonations(ISender sender)
+    public static async Task<Ok<PaginatedList<DonationDto>>> GetDonations(ISender sender, [AsParameters] GetDonationsQuery query)
     {
-        var result = await sender.Send(new GetDonationsQuery());
+        var result = await sender.Send(query);
         return TypedResults.Ok(result);
     }
 

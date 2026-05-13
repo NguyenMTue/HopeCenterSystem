@@ -8,6 +8,7 @@ public class Incidents : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
+        groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetIncidents, "");
         groupBuilder.MapPost(CreateIncident, "");
     }

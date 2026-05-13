@@ -8,6 +8,7 @@ public class Rooms : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
+        groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetRooms);
         groupBuilder.MapGet(GetRoomById, "{id}");
         groupBuilder.MapPost(CreateRoom);

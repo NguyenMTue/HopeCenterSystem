@@ -11,6 +11,7 @@ public class MedicalRecords : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
+        groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetMedicalRecords, "");
         groupBuilder.MapPost(CreateMedicalRecord, "");
         groupBuilder.MapPut(UpdateMedicalRecord, "{id}");

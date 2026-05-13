@@ -11,6 +11,7 @@ public class TaskAssignments : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
+        groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetTaskAssignments, "");
         groupBuilder.MapPost(CreateTaskAssignment, "");
         groupBuilder.MapPut(UpdateTaskAssignment, "{id}");

@@ -3,6 +3,7 @@ using backend.Application.Employees.Commands.DeleteEmployee;
 using backend.Application.Employees.Commands.UpdateEmployee;
 using backend.Application.Employees.Queries.GetEmployeeById;
 using backend.Application.Employees.Queries.GetEmployees;
+using backend.Application.Common.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace backend.Web.Endpoints;
@@ -11,6 +12,7 @@ public class Employees : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
+        groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetEmployees);
         groupBuilder.MapGet(GetEmployeeById, "{id}");
         groupBuilder.MapPost(CreateEmployee);
@@ -18,9 +20,9 @@ public class Employees : IEndpointGroup
         groupBuilder.MapDelete(DeleteEmployee, "{id}");
     }
 
-    public static async Task<Ok<EmployeesVm>> GetEmployees(ISender sender)
+    public static async Task<Ok<PaginatedList<EmployeeDto>>> GetEmployees(ISender sender, [AsParameters] GetEmployeesQuery query)
     {
-        var result = await sender.Send(new GetEmployeesQuery());
+        var result = await sender.Send(query);
         return TypedResults.Ok(result);
     }
 

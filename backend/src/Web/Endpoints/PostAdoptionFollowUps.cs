@@ -8,6 +8,7 @@ public class PostAdoptionFollowUps : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
+        groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetPostAdoptionFollowUps, "");
         groupBuilder.MapPost(CreatePostAdoptionFollowUp, "");
     }

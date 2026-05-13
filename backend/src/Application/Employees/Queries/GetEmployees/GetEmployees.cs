@@ -1,31 +1,40 @@
 using backend.Application.Common.Interfaces;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
-using Microsoft.EntityFrameworkCore;
+using backend.Application.Common.Mappings;
+using backend.Application.Common.Models;
 
 namespace backend.Application.Employees.Queries.GetEmployees;
 
-public record GetEmployeesQuery : IRequest<EmployeesVm>;
-
-public class GetEmployeesQueryHandler(IApplicationDbContext context, IMapper mapper) : IRequestHandler<GetEmployeesQuery, EmployeesVm>
+public record GetEmployeesQuery : IRequest<PaginatedList<EmployeeDto>>
 {
-    public async Task<EmployeesVm> Handle(GetEmployeesQuery request, CancellationToken cancellationToken)
-    {
-        return new EmployeesVm
-        {
-            Lists = await context.Employees
-                .AsNoTracking()
-                .Where(e => !e.IsDeleted)
-                .ProjectTo<EmployeeDto>(mapper.ConfigurationProvider)
-                .OrderBy(e => e.FullName)
-                .ToListAsync(cancellationToken)
-        };
-    }
+    public int PageNumber { get; init; } = 1;
+    public int PageSize { get; init; } = 10;
+    public string? SearchTerm { get; init; }
+    public string? Position { get; init; }
 }
 
-public class EmployeesVm
+public class GetEmployeesQueryHandler(IApplicationDbContext context, IMapper mapper) : IRequestHandler<GetEmployeesQuery, PaginatedList<EmployeeDto>>
 {
-    public IReadOnlyCollection<EmployeeDto> Lists { get; init; } = Array.Empty<EmployeeDto>();
+    public async Task<PaginatedList<EmployeeDto>> Handle(GetEmployeesQuery request, CancellationToken cancellationToken)
+    {
+        var query = context.Employees
+            .AsNoTracking()
+            .Where(e => !e.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(request.SearchTerm))
+        {
+            query = query.Where(x => x.FullName.Contains(request.SearchTerm) || (x.Phone != null && x.Phone.Contains(request.SearchTerm)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Position))
+        {
+            query = query.Where(x => x.Position != null && x.Position.Contains(request.Position));
+        }
+
+        return await query
+            .OrderBy(e => e.FullName)
+            .ProjectTo<EmployeeDto>(mapper.ConfigurationProvider)
+            .PaginatedListAsync(request.PageNumber, request.PageSize);
+    }
 }
 
 public class EmployeeDto

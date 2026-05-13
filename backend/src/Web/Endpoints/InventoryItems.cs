@@ -11,6 +11,7 @@ public class InventoryItems : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
+        groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetInventoryItems, "");
         groupBuilder.MapPost(CreateInventoryItem, "");
         groupBuilder.MapPut(UpdateInventoryItem, "{id}");

@@ -42,6 +42,10 @@ public class CreateInventoryTransactionCommandHandler(IApplicationDbContext cont
         }
         else if (request.Type == TransactionType.Export)
         {
+            if (item.CurrentQuantity < request.Quantity)
+            {
+                throw new InvalidOperationException($"Số lượng trong kho không đủ để xuất (Hiện có: {item.CurrentQuantity}, Yêu cầu: {request.Quantity})");
+            }
             item.CurrentQuantity -= request.Quantity;
         }
 

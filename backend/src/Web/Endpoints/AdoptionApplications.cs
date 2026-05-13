@@ -11,6 +11,7 @@ public class AdoptionApplications : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
+        groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetAdoptionApplications);
         groupBuilder.MapGet(GetAdoptionApplicationById, "{id}");
         groupBuilder.MapPost(CreateAdoptionApplication);

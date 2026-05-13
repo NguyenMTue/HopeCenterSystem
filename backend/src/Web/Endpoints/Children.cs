@@ -1,5 +1,6 @@
 using backend.Application.Children.Commands;
 using backend.Application.Children.Queries;
+using backend.Application.Common.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace backend.Web.Endpoints;
@@ -8,6 +9,7 @@ public class Children : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
+        groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetChildren);
         groupBuilder.MapGet(GetChildById, "{id}");
         groupBuilder.MapPost(CreateChild);
@@ -15,9 +17,9 @@ public class Children : IEndpointGroup
         groupBuilder.MapDelete(DeleteChild, "{id}");
     }
 
-    public static async Task<Ok<ChildrenVm>> GetChildren(ISender sender)
+    public static async Task<Ok<PaginatedList<ChildDto>>> GetChildren(ISender sender, [AsParameters] GetChildrenQuery query)
     {
-        var result = await sender.Send(new GetChildrenQuery());
+        var result = await sender.Send(query);
         return TypedResults.Ok(result);
     }
 

@@ -10,6 +10,7 @@ public class Notifications : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
+        groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetNotifications, "");
         groupBuilder.MapPost(CreateNotification, "");
         groupBuilder.MapPut(MarkAsRead, "{id}/mark-as-read");

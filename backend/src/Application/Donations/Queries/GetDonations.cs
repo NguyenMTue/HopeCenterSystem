@@ -1,28 +1,39 @@
 using backend.Application.Common.Interfaces;
+using backend.Application.Common.Mappings;
+using backend.Application.Common.Models;
 using backend.Domain.Enums;
 
 namespace backend.Application.Donations.Queries.GetDonations;
 
-public record GetDonationsQuery : IRequest<DonationsVm>;
-
-public class GetDonationsQueryHandler(IApplicationDbContext context, IMapper mapper) : IRequestHandler<GetDonationsQuery, DonationsVm>
+public record GetDonationsQuery : IRequest<PaginatedList<DonationDto>>
 {
-    public async Task<DonationsVm> Handle(GetDonationsQuery request, CancellationToken cancellationToken)
-    {
-        return new DonationsVm
-        {
-            Lists = await context.Donations
-                .AsNoTracking()
-                .ProjectTo<DonationDto>(mapper.ConfigurationProvider)
-                .OrderByDescending(t => t.ReceiveDate)
-                .ToListAsync(cancellationToken)
-        };
-    }
+    public int PageNumber { get; init; } = 1;
+    public int PageSize { get; init; } = 10;
+    public string? SearchTerm { get; init; }
+    public DonationType? DonationType { get; init; }
 }
 
-public class DonationsVm
+public class GetDonationsQueryHandler(IApplicationDbContext context, IMapper mapper) : IRequestHandler<GetDonationsQuery, PaginatedList<DonationDto>>
 {
-    public IReadOnlyCollection<DonationDto> Lists { get; init; } = Array.Empty<DonationDto>();
+    public async Task<PaginatedList<DonationDto>> Handle(GetDonationsQuery request, CancellationToken cancellationToken)
+    {
+        var query = context.Donations.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(request.SearchTerm))
+        {
+            query = query.Where(x => x.DonorName.Contains(request.SearchTerm));
+        }
+
+        if (request.DonationType.HasValue)
+        {
+            query = query.Where(x => x.DonationType == request.DonationType.Value);
+        }
+
+        return await query
+            .OrderByDescending(t => t.ReceiveDate)
+            .ProjectTo<DonationDto>(mapper.ConfigurationProvider)
+            .PaginatedListAsync(request.PageNumber, request.PageSize);
+    }
 }
 
 public class DonationDto

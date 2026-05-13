@@ -1,27 +1,32 @@
 using backend.Application.Common.Interfaces;
+using backend.Application.Common.Mappings;
+using backend.Application.Common.Models;
 
 namespace backend.Application.Adopters.Queries.GetAdopters;
 
-public record GetAdoptersQuery : IRequest<AdoptersVm>;
-
-public class GetAdoptersQueryHandler(IApplicationDbContext context, IMapper mapper) : IRequestHandler<GetAdoptersQuery, AdoptersVm>
+public record GetAdoptersQuery : IRequest<PaginatedList<AdopterDto>>
 {
-    public async Task<AdoptersVm> Handle(GetAdoptersQuery request, CancellationToken cancellationToken)
-    {
-        return new AdoptersVm
-        {
-            Lists = await context.Adopters
-                .AsNoTracking()
-                .ProjectTo<AdopterDto>(mapper.ConfigurationProvider)
-                .OrderBy(t => t.FullName)
-                .ToListAsync(cancellationToken)
-        };
-    }
+    public int PageNumber { get; init; } = 1;
+    public int PageSize { get; init; } = 10;
+    public string? SearchTerm { get; init; }
 }
 
-public class AdoptersVm
+public class GetAdoptersQueryHandler(IApplicationDbContext context, IMapper mapper) : IRequestHandler<GetAdoptersQuery, PaginatedList<AdopterDto>>
 {
-    public IReadOnlyCollection<AdopterDto> Lists { get; init; } = Array.Empty<AdopterDto>();
+    public async Task<PaginatedList<AdopterDto>> Handle(GetAdoptersQuery request, CancellationToken cancellationToken)
+    {
+        var query = context.Adopters.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(request.SearchTerm))
+        {
+            query = query.Where(x => x.FullName.Contains(request.SearchTerm) || x.IDCard.Contains(request.SearchTerm));
+        }
+
+        return await query
+            .OrderBy(t => t.FullName)
+            .ProjectTo<AdopterDto>(mapper.ConfigurationProvider)
+            .PaginatedListAsync(request.PageNumber, request.PageSize);
+    }
 }
 
 public class AdopterDto

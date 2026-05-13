@@ -8,6 +8,7 @@ public class InventoryTransactions : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
+        groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetInventoryTransactions, "");
         groupBuilder.MapPost(CreateInventoryTransaction, "");
     }

@@ -8,6 +8,7 @@ public class CareLogs : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
+        groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetCareLogs, "");
         groupBuilder.MapPost(CreateCareLog, "");
     }

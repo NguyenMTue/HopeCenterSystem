@@ -28,6 +28,17 @@ public class UpdateAdoptionApplicationCommandHandler(IApplicationDbContext conte
         entity.Reason = request.Reason;
         entity.Notes = request.Notes;
 
+        if (request.Status == ApplicationStatus.Approved)
+        {
+            var child = await context.Children
+                .FindAsync(new object[] { entity.ChildId }, cancellationToken);
+
+            if (child != null)
+            {
+                child.Status = ChildStatus.Adopted;
+            }
+        }
+
         await context.SaveChangesAsync(cancellationToken);
     }
 }
