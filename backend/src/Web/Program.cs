@@ -2,6 +2,9 @@ using Microsoft.Extensions.DependencyInjection;
 using backend.Infrastructure;
 using backend.Infrastructure.Data;
 using Scalar.AspNetCore;
+using Microsoft.AspNetCore.Identity;
+using backend.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,6 +23,13 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     await app.InitialiseDatabaseAsync();
+    
+    // Thêm đoạn chẩn đoán này
+    using var scope = app.Services.CreateScope();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<Account>>();
+    var userCount = await userManager.Users.CountAsync();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    logger.LogCritical("CHẨN ĐOÁN: Số lượng User trong Database hiện tại là: {Count}", userCount);
 }
 else
 {
@@ -32,6 +42,9 @@ app.UseCors(static builder =>
     builder.AllowAnyMethod()
         .AllowAnyHeader()
         .AllowAnyOrigin());
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.UseFileServer();
 

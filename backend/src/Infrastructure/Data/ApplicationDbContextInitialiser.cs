@@ -51,12 +51,13 @@ public class ApplicationDbContextInitialiser
     {
         try
         {
+            _logger.LogInformation("Bắt đầu Seed dữ liệu mẫu...");
             await TrySeedAsync();
-            _logger.LogInformation("Đã Seed dữ liệu mẫu thành công.");
+            _logger.LogInformation("Đã hoàn tất Seed dữ liệu mẫu.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Có lỗi xảy ra khi Seed dữ liệu.");
+            _logger.LogError(ex, "Có lỗi nghiêm trọng xảy ra khi Seed dữ liệu.");
             throw;
         }
     }
@@ -79,10 +80,11 @@ public class ApplicationDbContextInitialiser
         {
             if (!await _roleManager.RoleExistsAsync(roleInfo.Name))
             {
+                _logger.LogInformation("Đang tạo Role: {RoleName}", roleInfo.Name);
                 await _roleManager.CreateAsync(new Role 
                 { 
                     Name = roleInfo.Name, 
-                    Description = roleInfo.Description // Sử dụng trường mở rộng bạn đã giữ lại
+                    Description = roleInfo.Description 
                 });
             }
         }
@@ -92,25 +94,45 @@ public class ApplicationDbContextInitialiser
         // ==========================================
         
         // 2.1 Tạo Admin (1 người)
-        var adminAccount = new Account { UserName = "admin", Email = "admin@hopecenter.com", IsActive = true };
-        if (_userManager.Users.All(u => u.UserName != adminAccount.UserName))
+        var adminEmail = "admin@hopecenter.com";
+        var adminUser = await _userManager.FindByEmailAsync(adminEmail);
+        
+        if (adminUser == null)
         {
-            await _userManager.CreateAsync(adminAccount, "Admin@123!");
-            await _userManager.AddToRoleAsync(adminAccount, "Administrator");
-
-            _context.Employees.Add(new Employee
+            _logger.LogInformation("Đang tạo tài khoản Admin mặc định...");
+            var adminAccount = new Account { UserName = adminEmail, Email = adminEmail, IsActive = true, EmailConfirmed = true };
+            var result = await _userManager.CreateAsync(adminAccount, "Admin@123!");
+            
+            if (result.Succeeded)
             {
-                AccountId = adminAccount.Id,
-                FullName = "Nguyễn Minh Tuệ",
-                Position = "Quản trị hệ thống",
-                Phone = "0988123456",
-                DOB = new DateTime(1980, 5, 15)
-            });
+                _logger.LogInformation("Đã tạo Admin thành công. Đang gán Role Administrator...");
+                await _userManager.AddToRoleAsync(adminAccount, "Administrator");
+
+                _context.Employees.Add(new Employee
+                {
+                    AccountId = adminAccount.Id,
+                    FullName = "Nguyễn Minh Tuệ",
+                    Position = "Quản trị hệ thống",
+                    Phone = "0988123456",
+                    DOB = new DateTime(1980, 5, 15)
+                });
+            }
+            else
+            {
+                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                _logger.LogError("LỖI khi tạo Admin: {Errors}", errors);
+                throw new Exception($"Không thể tạo tài khoản Admin: {errors}");
+            }
+        }
+        else
+        {
+            _logger.LogInformation("Tài khoản Admin ({Email}) đã tồn tại.", adminEmail);
         }
 
         // 2.2 Tạo Giám đốc (1 người)
-        var directorAccount = new Account { UserName = "director", Email = "director@hopecenter.com", IsActive = true };
-        if (_userManager.Users.All(u => u.UserName != directorAccount.UserName))
+        var directorEmail = "director@hopecenter.com";
+        var directorAccount = new Account { UserName = directorEmail, Email = directorEmail, IsActive = true, EmailConfirmed = true };
+        if (!await _userManager.Users.AnyAsync(u => u.Email == directorEmail))
         {
             await _userManager.CreateAsync(directorAccount, "Director@123!");
             await _userManager.AddToRoleAsync(directorAccount, "Director");
@@ -125,6 +147,9 @@ public class ApplicationDbContextInitialiser
             });
         }
 
+        // Lưu Admin và Director trước khi tiếp tục
+        await _context.SaveChangesAsync();
+
         // ==========================================
         // 3. TẠO ACCOUNT QUẢN LÝ VÀ NHÂN VIÊN
         // ==========================================
@@ -133,9 +158,9 @@ public class ApplicationDbContextInitialiser
         for (int i = 1; i <= 2; i++)
         {
             var username = $"manager{i}";
-            var managerAccount = new Account { UserName = username, Email = $"{username}@hopecenter.com", IsActive = true };
+            var managerAccount = new Account { UserName = username, Email = $"{username}@hopecenter.com", IsActive = true, EmailConfirmed = true };
             
-            if (_userManager.Users.All(u => u.UserName != managerAccount.UserName))
+            if (!await _userManager.Users.AnyAsync(u => u.UserName == managerAccount.UserName))
             {
                 await _userManager.CreateAsync(managerAccount, "Manager@123!");
                 await _userManager.AddToRoleAsync(managerAccount, "Manager");
@@ -168,9 +193,9 @@ public class ApplicationDbContextInitialiser
         for (int i = 0; i < 10; i++)
         {
             var username = $"staff{i + 1}";
-            var staffAccount = new Account { UserName = username, Email = $"{username}@hopecenter.com", IsActive = true };
+            var staffAccount = new Account { UserName = username, Email = $"{username}@hopecenter.com", IsActive = true, EmailConfirmed = true };
             
-            if (_userManager.Users.All(u => u.UserName != staffAccount.UserName))
+            if (!await _userManager.Users.AnyAsync(u => u.UserName == staffAccount.UserName))
             {
                 await _userManager.CreateAsync(staffAccount, "Staff@123!");
                 await _userManager.AddToRoleAsync(staffAccount, "CareGiver");
@@ -200,9 +225,9 @@ public class ApplicationDbContextInitialiser
         for (int i = 0; i < 10; i++)
         {
             var username = $"adopter{i + 1}";
-            var adopterAccount = new Account { UserName = username, Email = $"{username}@gmail.com", IsActive = true };
+            var adopterAccount = new Account { UserName = username, Email = $"{username}@gmail.com", IsActive = true, EmailConfirmed = true };
             
-            if (_userManager.Users.All(u => u.UserName != adopterAccount.UserName))
+            if (!await _userManager.Users.AnyAsync(u => u.UserName == adopterAccount.UserName))
             {
                 await _userManager.CreateAsync(adopterAccount, "Adopter@123!");
                 await _userManager.AddToRoleAsync(adopterAccount, "Adopter");
