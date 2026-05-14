@@ -8,6 +8,7 @@ public record CreateInventoryItemCommand : IRequest<Guid>
     public string ItemName { get; init; } = null!;
     public string? Category { get; init; }
     public string? Unit { get; init; }
+    public int CurrentQuantity { get; init; }
     public int MinStockLevel { get; init; }
 }
 
@@ -20,8 +21,8 @@ public class CreateInventoryItemCommandHandler(IApplicationDbContext context) : 
             ItemName = request.ItemName,
             Category = request.Category,
             Unit = request.Unit,
-            MinStockLevel = request.MinStockLevel,
-            CurrentQuantity = 0
+            CurrentQuantity = request.CurrentQuantity,
+            MinStockLevel = request.MinStockLevel
         };
 
         context.InventoryItems.Add(entity);

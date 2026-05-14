@@ -32,7 +32,7 @@ export class AuthService {
   }
 
   logout(): Observable<void> {
-    return this.usersClient.logout({}).pipe(
+    return this.usersClient.logoutCustom().pipe(
       tap(() => this._isAuthenticated.next(false))
     );
   }

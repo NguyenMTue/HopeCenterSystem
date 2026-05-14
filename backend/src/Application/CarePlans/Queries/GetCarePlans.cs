@@ -29,6 +29,7 @@ public class CarePlanDto
 {
     public Guid Id { get; init; }
     public Guid ChildId { get; init; }
+    public string? ChildName { get; init; }
     public string Title { get; init; } = null!;
     public DateTime StartDate { get; init; }
     public DateTime EndDate { get; init; }
@@ -39,7 +40,8 @@ public class CarePlanDto
     {
         public Mapping()
         {
-            CreateMap<backend.Domain.Entities.CarePlan, CarePlanDto>();
+            CreateMap<backend.Domain.Entities.CarePlan, CarePlanDto>()
+                .ForMember(d => d.ChildName, opt => opt.MapFrom(s => s.Child.FullName));
         }
     }
 }

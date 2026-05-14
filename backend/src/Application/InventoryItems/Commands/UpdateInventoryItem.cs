@@ -8,6 +8,7 @@ public record UpdateInventoryItemCommand : IRequest
     public string ItemName { get; init; } = null!;
     public string? Category { get; init; }
     public string? Unit { get; init; }
+    public int CurrentQuantity { get; init; }
     public int MinStockLevel { get; init; }
 }
 
@@ -23,6 +24,7 @@ public class UpdateInventoryItemCommandHandler(IApplicationDbContext context) : 
         entity.ItemName = request.ItemName;
         entity.Category = request.Category;
         entity.Unit = request.Unit;
+        entity.CurrentQuantity = request.CurrentQuantity;
         entity.MinStockLevel = request.MinStockLevel;
 
         await context.SaveChangesAsync(cancellationToken);
