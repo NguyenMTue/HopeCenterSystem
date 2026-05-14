@@ -19,14 +19,13 @@ public record RegisterUserCommand : IRequest<Guid>
 
 public class RegisterUserCommandHandler(
     UserManager<Account> userManager,
-    IApplicationDbContext context,
-    IUser currentUser) : IRequestHandler<RegisterUserCommand, Guid>
+    IApplicationDbContext context) : IRequestHandler<RegisterUserCommand, Guid>
 {
     public async Task<Guid> Handle(RegisterUserCommand request, CancellationToken cancellationToken)
     {
         var user = new Account
         {
-            UserName = request.UserName,
+            UserName = string.IsNullOrWhiteSpace(request.UserName) ? request.Email : request.UserName,
             Email = request.Email,
             EmailConfirmed = true, // Tự động xác nhận email để dễ test
             IsActive = true
@@ -42,16 +41,13 @@ public class RegisterUserCommandHandler(
         // Xử lý Role
         var rolesToAssign = new List<string>();
         
-        // Kiểm tra xem người đang thực hiện có phải Admin không
-        bool isAdmin = currentUser.Roles?.Contains(backend.Domain.Constants.Roles.Administrator) ?? false;
-
-        if (isAdmin && request.Roles.Any())
+        // Mặc định là Adopter cho đăng ký từ bên ngoài
+        if (request.Roles != null && request.Roles.Any())
         {
             rolesToAssign = request.Roles;
         }
         else
         {
-            // Mặc định là Adopter nếu không phải admin hoặc không gửi role
             rolesToAssign.Add(backend.Domain.Constants.Roles.Adopter);
         }
 

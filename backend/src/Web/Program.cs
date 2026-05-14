@@ -19,6 +19,12 @@ builder.Services.AddEndpointsApiExplorer();
 
 var app = builder.Build();
 
+// PHẢI ĐẶT Ở ĐẦU TIÊN để tránh lỗi CORS do redirect hoặc middleware khác
+app.UseCors(policy => 
+    policy.AllowAnyOrigin()
+          .AllowAnyMethod()
+          .AllowAnyHeader());
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -37,11 +43,7 @@ else
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
-app.UseCors(static builder => 
-    builder.AllowAnyMethod()
-        .AllowAnyHeader()
-        .AllowAnyOrigin());
+// app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -21,7 +21,7 @@ var web = builder.AddProject<Projects.Web>(Services.WebApi)
 
 if (builder.ExecutionContext.IsRunMode)
 {
-    builder.AddJavaScriptApp(Services.WebFrontend, "./../Web/ClientApp")
+    builder.AddJavaScriptApp(Services.WebFrontend, "../../../frontend")
         .WithRunScript("start")
         .WithReference(web)
         .WaitFor(web)

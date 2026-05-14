@@ -29,7 +29,9 @@ public class AdoptionApplicationDto
 {
     public Guid Id { get; init; }
     public Guid? AdopterId { get; init; }
+    public string? AdopterName { get; init; }
     public Guid? ChildId { get; init; }
+    public string? ChildName { get; init; }
     public DateTime SubmitDate { get; init; }
     public ApplicationStatus Status { get; init; }
     public Guid? ApproverId { get; init; }
@@ -41,7 +43,9 @@ public class AdoptionApplicationDto
     {
         public Mapping()
         {
-            CreateMap<backend.Domain.Entities.AdoptionApplication, AdoptionApplicationDto>();
+            CreateMap<backend.Domain.Entities.AdoptionApplication, AdoptionApplicationDto>()
+                .ForMember(d => d.AdopterName, opt => opt.MapFrom(s => s.Adopter != null ? s.Adopter.FullName : null))
+                .ForMember(d => d.ChildName, opt => opt.MapFrom(s => s.Child != null ? s.Child.FullName : null));
         }
     }
 }

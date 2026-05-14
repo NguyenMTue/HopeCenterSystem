@@ -1,4 +1,5 @@
-﻿using backend.Infrastructure.Identity;
+﻿using backend.Application.Common.Interfaces;
+using backend.Infrastructure.Identity;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -20,18 +21,27 @@ public class Users : IEndpointGroup
         identityGroup.MapIdentityApi<Account>();
 
         // Chỉnh sửa: Đổi tên endpoint register custom để tránh trùng lặp hoàn toàn với MapIdentityApi
-        groupBuilder.MapPost(Register, "register-custom");
+        groupBuilder.MapPost(RegisterUser, "register-custom")
+            .WithName("RegisterCustom");
 
-        groupBuilder.MapGet(GetUsers);
+        groupBuilder.MapGet(GetUsers)
+            .WithName("GetUsers");
+
+        groupBuilder.MapGet(GetCurrentUser, "me")
+            .WithName("GetCurrentUser")
+            .RequireAuthorization();
 
         // Thêm API Logout custom
-        groupBuilder.MapPost(Logout, "logout").RequireAuthorization();
+        groupBuilder.MapPost(Logout, "logout")
+            .WithName("LogoutCustom")
+            .RequireAuthorization();
         
         // Endpoint chẩn đoán
-        groupBuilder.MapPost(TestLogin, "test-login");
+        groupBuilder.MapPost(TestLogin, "test-login")
+            .WithName("TestLogin");
     }
 
-    public static async Task<Created<Guid>> Register(ISender sender, RegisterUserCommand command)
+    public static async Task<Created<Guid>> RegisterUser(ISender sender, RegisterUserCommand command)
     {
         var id = await sender.Send(command);
         return TypedResults.Created($"/api/Users/{id}", id);
@@ -48,6 +58,19 @@ public class Users : IEndpointGroup
     {
         var result = await sender.Send(new GetUsersQuery());
         return TypedResults.Ok(result);
+    }
+
+    public static async Task<IResult> GetCurrentUser(ISender sender, IUser currentUser, UserManager<Account> userManager)
+    {
+        var userId = currentUser.Id;
+        if (string.IsNullOrEmpty(userId)) return TypedResults.Unauthorized();
+
+        var users = await sender.Send(new GetUsersQuery());
+        var user = users.FirstOrDefault(u => u.Id.ToString() == userId);
+
+        if (user == null) return TypedResults.NotFound();
+
+        return TypedResults.Ok(user);
     }
     
     public static async Task<IResult> TestLogin(

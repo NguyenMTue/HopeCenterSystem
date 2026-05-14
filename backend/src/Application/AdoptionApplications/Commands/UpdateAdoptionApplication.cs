@@ -28,10 +28,10 @@ public class UpdateAdoptionApplicationCommandHandler(IApplicationDbContext conte
         entity.Reason = request.Reason;
         entity.Notes = request.Notes;
 
-        if (request.Status == ApplicationStatus.Approved)
+        if (request.Status == ApplicationStatus.Approved && entity.ChildId.HasValue)
         {
             var child = await context.Children
-                .FindAsync(new object[] { entity.ChildId }, cancellationToken);
+                .FindAsync(new object[] { entity.ChildId.Value }, cancellationToken);
 
             if (child != null)
             {

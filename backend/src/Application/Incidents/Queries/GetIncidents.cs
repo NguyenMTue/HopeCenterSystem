@@ -29,6 +29,7 @@ public class IncidentDto
 {
     public Guid Id { get; init; }
     public Guid? ChildId { get; init; }
+    public string? ChildName { get; init; }
     public Guid? ReporterId { get; init; }
     public DateTime IncidentDate { get; init; }
     public string Description { get; init; } = null!;
@@ -38,7 +39,8 @@ public class IncidentDto
     {
         public Mapping()
         {
-            CreateMap<backend.Domain.Entities.Incident, IncidentDto>();
+            CreateMap<backend.Domain.Entities.Incident, IncidentDto>()
+                .ForMember(d => d.ChildName, opt => opt.MapFrom(s => s.Child != null ? s.Child.FullName : null));
         }
     }
 }
