@@ -33,9 +33,10 @@ export const router = createBrowserRouter([
     element: <UserLayout />,
     children: [
       { index: true, element: <HomePage /> }, // Đã thay thế giao diện mới
-{ path: 'about', element: <AboutPage /> },
-{ path: 'adoption', element: <AdoptionPage /> },
-{ path: 'donation', element: <DonationPage /> },
+      { path: 'about', element: <AboutPage /> },
+      { path: 'adoption', element: <AdoptionPage /> },
+      { path: 'donation', element: <DonationPage /> },
+      { path: 'adopter-portal', element: <AdoptionPortal /> },
     ],
   },
 
@@ -71,7 +72,6 @@ export const router = createBrowserRouter([
       { path: 'roles', element: <RoleManagement /> },
       { path: 'backup', element: <BackupManagement /> },
       { path: 'profile', element: <ProfilePage /> },
-      { path: 'adopter-portal', element: <AdoptionPortal /> },
     ],
   },
 

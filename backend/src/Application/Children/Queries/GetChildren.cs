@@ -56,24 +56,51 @@ public class GetChildrenQueryHandler(IApplicationDbContext context, IMapper mapp
             .ProjectTo<ChildDto>(mapper.ConfigurationProvider)
             .PaginatedListAsync(request.PageNumber, request.PageSize);
 
+        // Lấy danh sách ảnh đại diện cho các bé
+        var childIds = list.Items.Select(x => x.Id).ToList();
+        var avatars = await context.Attachments
+            .Where(a => childIds.Contains(a.TargetId) && a.TargetType == AttachmentTargetType.Child && a.FileType != null && a.FileType.StartsWith("image/"))
+            .ToDictionaryAsync(a => a.TargetId, a => a.FilePath, cancellationToken);
+
+        foreach (var item in list.Items)
+        {
+            item.AvatarUrl = avatars.GetValueOrDefault(item.Id);
+        }
+
         if (isAdopter)
         {
-            var maskedItems = list.Items.Select(item => new ChildDto
+            // Kiểm tra xem Adopter hiện tại đã có đơn đăng ký nào được duyệt (Approved) hay chưa
+            var isApprovedAdopter = false;
+            var userIdStr = user.Id;
+            if (Guid.TryParse(userIdStr, out var accountId))
+            {
+                var adopter = await context.Adopters
+                    .FirstOrDefaultAsync(a => a.AccountId == accountId, cancellationToken);
+                if (adopter != null)
+                {
+                    isApprovedAdopter = await context.AdoptionApplications
+                        .AnyAsync(a => a.AdopterId == adopter.Id && a.Status == ApplicationStatus.Approved, cancellationToken);
+                }
+            }
+
+            var processedItems = list.Items.Select(item => new ChildDto
             {
                 Id = item.Id,
-                FullName = $"Trẻ em ẩn danh {item.Id.ToString()[..8].ToUpper()}",
-                DOB = item.DOB,
+                // Nếu được duyệt rồi thì hiển thị tên thật và ảnh thật, ngược lại ẩn danh
+                FullName = isApprovedAdopter ? item.FullName : $"Trẻ em ẩn danh {item.Id.ToString()[..8].ToUpper()}",
+                AvatarUrl = isApprovedAdopter ? item.AvatarUrl : null,
+                DOB = isApprovedAdopter ? item.DOB : null,
                 Gender = item.Gender,
-                HealthStatus = "Khỏe mạnh",
-                Background = "Thông tin bảo mật",
-                RoomId = null,
+                HealthStatus = isApprovedAdopter ? item.HealthStatus : "Khỏe mạnh",
+                Background = isApprovedAdopter ? item.Background : "Thông tin bảo mật",
+                RoomId = isApprovedAdopter ? item.RoomId : null,
                 Status = item.Status,
                 AdmissionDate = item.AdmissionDate,
-                Weight = item.Weight,
-                Height = item.Height
+                Weight = isApprovedAdopter ? item.Weight : null,
+                Height = isApprovedAdopter ? item.Height : null
             }).ToList();
 
-            return new PaginatedList<ChildDto>(maskedItems, list.TotalCount, list.PageNumber, list.TotalPages);
+            return new PaginatedList<ChildDto>(processedItems, list.TotalCount, list.PageNumber, list.TotalPages);
         }
 
         return list;
@@ -93,6 +120,7 @@ public class ChildDto
     public DateTime AdmissionDate { get; init; }
     public double? Weight { get; init; }
     public double? Height { get; init; }
+    public string? AvatarUrl { get; set; }
 
     private class Mapping : Profile
     {

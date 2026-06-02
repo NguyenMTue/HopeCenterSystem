@@ -36,7 +36,7 @@ const MainLayout: React.FC = () => {
         // Chuyển hướng nếu vào trang gốc dashboard
         if (location.pathname === '/dashboard' || location.pathname === '/dashboard/') {
           if (response.data.userType === 'Adopter') {
-            navigate('/dashboard/adopter-portal', { replace: true });
+            navigate('/adopter-portal', { replace: true });
           } else {
             navigate('/dashboard/children', { replace: true });
           }

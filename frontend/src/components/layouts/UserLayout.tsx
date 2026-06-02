@@ -15,22 +15,23 @@ const UserLayout: React.FC = () => {
 
   const token = localStorage.getItem('token');
 
+  const fetchUserInfo = async () => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const response = await apiClient.get('/api/Users/me');
+      setUserInfo(response.data);
+    } catch (error) {
+      console.error('Failed to fetch user info', error);
+      localStorage.removeItem('token');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchUserInfo = async () => {
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const response = await apiClient.get('/api/Users/me');
-        setUserInfo(response.data);
-      } catch (error) {
-        console.error('Failed to fetch user info', error);
-        localStorage.removeItem('token');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchUserInfo();
   }, [token]);
 
@@ -42,18 +43,20 @@ const UserLayout: React.FC = () => {
   };
 
   const userMenuItems = [
-    { 
-      key: 'profile', 
-      icon: <UserOutlined />, 
-      label: 'Hồ sơ cá nhân', 
-      onClick: () => navigate('/dashboard/profile') 
-    },
+    ...(userInfo?.userType !== 'Adopter' ? [
+      { 
+        key: 'profile', 
+        icon: <UserOutlined />, 
+        label: 'Hồ sơ cá nhân', 
+        onClick: () => navigate('/dashboard/profile') 
+      }
+    ] : []),
     ...(userInfo?.userType === 'Adopter' ? [
       { 
         key: 'portal', 
         icon: <AppstoreOutlined />, 
         label: 'Cổng thông tin', 
-        onClick: () => navigate('/dashboard/adopter-portal') 
+        onClick: () => navigate('/adopter-portal') 
       }
     ] : [
       { 
@@ -177,7 +180,7 @@ const UserLayout: React.FC = () => {
       </Header>
 
       <Content style={{ width: '100%', minHeight: 'calc(100vh - 80px - 100px)' }}>
-        <Outlet />
+        <Outlet context={{ fetchUserInfo }} />
       </Content>
 
       <Footer style={{ 

@@ -15,7 +15,10 @@ import {
   Input, 
   Form, 
   Divider, 
-  Spin 
+  Spin,
+  Alert,
+  Tabs,
+  Image
 } from 'antd';
 import { 
   Heart, 
@@ -34,7 +37,10 @@ import {
   Phone,
   MessageSquare,
   Building,
-  HeartHandshake
+  HeartHandshake,
+  Lock,
+  Unlock,
+  Eye
 } from 'lucide-react';
 import { 
   EyeOutlined, 
@@ -46,12 +52,16 @@ import {
   InfoCircleOutlined
 } from '@ant-design/icons';
 import apiClient from '../../services/apiClient';
+import { useOutletContext } from 'react-router-dom';
 
 const { Title, Text, Paragraph } = Typography;
 
 const AdoptionPortal: React.FC = () => {
+  const { fetchUserInfo } = useOutletContext<any>() || {};
+
   // Navigation & View State
   const [view, setView] = useState<'portal' | 'form' | 'profile'>('portal');
+  const [activeTab, setActiveTab] = useState<string>('children');
   
   // Data State
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -61,7 +71,7 @@ const AdoptionPortal: React.FC = () => {
   // Loading States
   const [loadingUser, setLoadingUser] = useState(true);
   const [loadingApps, setLoadingApps] = useState(true);
-  const [loadingChildren, setLoadingChildren] = useState(false);
+  const [loadingChildren, setLoadingChildren] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   
   // Details Modal
@@ -87,10 +97,14 @@ const AdoptionPortal: React.FC = () => {
     agreed: false
   });
 
+  // Calculate approval status based on applications
+  const isApproved = applications.some(a => a.status === 1 || a.status === 'Approved');
+
   // Load User Information & Applications on mount
   useEffect(() => {
     fetchUserData();
     fetchApplications();
+    fetchChildren();
   }, []);
 
   const fetchUserData = async () => {
@@ -107,7 +121,7 @@ const AdoptionPortal: React.FC = () => {
         maritalStatus: response.data.maritalStatus || '',
         address: response.data.address || '',
         idCard: response.data.idCard || '',
-        occupation: response.data.position || '' // fallback
+        occupation: response.data.position || ''
       }));
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -124,13 +138,12 @@ const AdoptionPortal: React.FC = () => {
       setApplications(response.data);
     } catch (error) {
       console.error('Error fetching my applications:', error);
-      // Fallback fallback mock if database fails
       setApplications([
         {
           id: 'APP-SEED-01',
           childName: 'Nguyễn Gia Bảo',
           submitDate: '2026-05-20',
-          status: 0, // Pending
+          status: 0,
           reason: 'Gia đình có nguyện vọng nhận thêm bé trai để chăm sóc và tạo môi trường phát triển tốt nhất.',
           notes: 'Môi trường sống: Nhà 3 tầng, sân vườn thoáng mát. Công việc: Giáo viên.'
         }
@@ -157,10 +170,15 @@ const AdoptionPortal: React.FC = () => {
     }
   };
 
-  // Trigger form view and fetch children list
-  const startNewApplication = () => {
+  // Trigger form view and prefill child if selected from gallery
+  const startNewApplication = (childId?: string) => {
     setView('form');
     setCurrentStep(1);
+    if (childId) {
+      setSelectedChildId(childId);
+    } else {
+      setSelectedChildId('');
+    }
     fetchChildren();
   };
 
@@ -208,7 +226,7 @@ const AdoptionPortal: React.FC = () => {
 
     setSubmitting(true);
     try {
-      // 1. Cập nhật thông tin Người nhận nuôi (Adopter Profile) nếu có AdopterId
+      // 1. Update Adopter Profile if adopterId exists
       if (currentUser?.adopterId) {
         await apiClient.put(`/api/Adopters/${currentUser.adopterId}`, {
           id: currentUser.adopterId,
@@ -220,7 +238,7 @@ const AdoptionPortal: React.FC = () => {
         });
       }
 
-      // 2. Gửi đơn nhận nuôi
+      // 2. Submit Adoption application
       const structuredNotes = `Nghề nghiệp: ${formState.occupation}\nThu nhập: ${formState.incomeScope}\nMô tả không gian sống: ${formState.homeDesc}`;
       await apiClient.post('/api/AdoptionApplications', {
         childId: selectedChildId,
@@ -230,8 +248,13 @@ const AdoptionPortal: React.FC = () => {
 
       message.success('Gửi hồ sơ đăng ký nhận nuôi trực tuyến thành công!');
       setView('portal');
+      setActiveTab('history'); // Switch to history tab to track progress
       fetchApplications();
-      fetchUserData(); // Reload profile updates
+      fetchUserData();
+      fetchChildren(); // Refresh children info (now they might have unlocked names if approved)
+      if (fetchUserInfo) {
+        fetchUserInfo();
+      }
     } catch (error: any) {
       console.error('Error submitting application:', error);
       message.error(error.response?.data?.detail || 'Có lỗi xảy ra khi gửi hồ sơ. Vui lòng thử lại!');
@@ -256,6 +279,9 @@ const AdoptionPortal: React.FC = () => {
       message.success('Cập nhật hồ sơ cá nhân thành công!');
       setView('portal');
       fetchUserData();
+      if (fetchUserInfo) {
+        fetchUserInfo();
+      }
     } catch (error) {
       console.error('Error updating profile:', error);
       message.error('Không thể cập nhật hồ sơ cá nhân.');
@@ -293,7 +319,6 @@ const AdoptionPortal: React.FC = () => {
     }
   };
 
-  // Columns definition for historical applications
   const columns = [
     {
       title: 'Mã hồ sơ',
@@ -338,21 +363,34 @@ const AdoptionPortal: React.FC = () => {
     },
   ];
 
+  // Helper to build child photo path or fallback to Unsplash placeholder
+  const getChildImageUrl = (child: any) => {
+    if (isApproved && child.avatarUrl) {
+      if (child.avatarUrl.startsWith('http://') || child.avatarUrl.startsWith('https://')) {
+        return child.avatarUrl;
+      }
+      const baseUrl = apiClient.defaults.baseURL || 'http://localhost:5176';
+      return `${baseUrl}${child.avatarUrl}`;
+    }
+    // Fallback vector placeholder for masked child
+    return 'https://images.unsplash.com/photo-1595250912759-99446d5c6be2?q=80&w=300&auto=format&fit=crop';
+  };
+
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '12px' }}>
+    <div style={{ maxWidth: '1200px', margin: '30px auto', padding: '0 20px', minHeight: '80vh' }}>
       
       {/* 1. PORTAL MAIN VIEW */}
       {view === 'portal' && (
-        <Space direction="vertical" size={24} style={{ width: '100%' }}>
+        <Space direction="vertical" size={28} style={{ width: '100%' }}>
           
           {/* Welcome Warm Hero Section */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 p-8 md:p-12 text-white shadow-lg">
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 p-8 md:p-12 text-white shadow-xl">
             <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
             <div className="absolute right-12 top-6 w-32 h-32 bg-pink-300/20 rounded-full blur-2xl"></div>
             
             <div className="relative z-10 space-y-4 max-w-2xl">
               <span className="inline-flex items-center gap-1.5 px-3.5 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-bold tracking-wide uppercase">
-                <HeartFilled className="text-white animate-pulse" /> Cổng thông tin mái ấm gia đình
+                <HeartFilled className="text-white animate-pulse" /> Cổng thông tin gia đình nhận nuôi
               </span>
               <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white leading-tight">
                 Chào mừng bạn, {currentUser?.fullName || 'Người nhận nuôi'}!
@@ -364,7 +402,7 @@ const AdoptionPortal: React.FC = () => {
               <div className="pt-2 flex flex-wrap gap-3">
                 <Button 
                   size="large" 
-                  onClick={startNewApplication}
+                  onClick={() => startNewApplication()}
                   style={{ 
                     borderRadius: '99px', 
                     fontWeight: 700, 
@@ -410,26 +448,39 @@ const AdoptionPortal: React.FC = () => {
 
             <Card variant="borderless" className="shadow-xs bg-slate-50 border border-slate-100/50 rounded-2xl">
               <Space direction="vertical" size={4}>
-                <Text type="secondary" className="text-xs uppercase tracking-wider font-bold">Hồ sơ đã duyệt</Text>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-black text-emerald-600">
-                    {applications.filter(a => a.status === 1 || a.status === 'Approved').length}
-                  </span>
-                  <span className="text-xs font-medium text-slate-400">hồ sơ thành công</span>
+                <Text type="secondary" className="text-xs uppercase tracking-wider font-bold">Trạng thái xác thực</Text>
+                <div className="flex items-center gap-2">
+                  {isApproved ? (
+                    <>
+                      <BadgeCheck className="text-emerald-500 w-8 h-8" />
+                      <div>
+                        <p className="text-sm font-bold text-emerald-600 leading-none">Đã xác minh</p>
+                        <p className="text-[10px] text-slate-400 mt-1">Đã mở khóa toàn bộ ảnh các bé</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="text-amber-500 w-7 h-7" />
+                      <div>
+                        <p className="text-sm font-bold text-amber-600 leading-none">Chờ xác minh bước 1</p>
+                        <p className="text-[10px] text-slate-400 mt-1">Ảnh của bé đang được ẩn danh bảo mật</p>
+                      </div>
+                    </>
+                  )}
                 </div>
               </Space>
             </Card>
 
             <Card variant="borderless" className="shadow-xs bg-slate-50 border border-slate-100/50 rounded-2xl">
               <Space direction="vertical" size={4}>
-                <Text type="secondary" className="text-xs uppercase tracking-wider font-bold">Tư vấn viên hỗ trợ</Text>
+                <Text type="secondary" className="text-xs uppercase tracking-wider font-bold">Tài liệu tư pháp liên hệ</Text>
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
                     <Phone size={14} />
                   </div>
                   <div>
                     <p className="text-xs font-bold text-slate-700 leading-none">0988.123.456</p>
-                    <p className="text-[10px] text-slate-400 mt-1">Đường dây nóng hỗ trợ 24/7</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Tổng đài viên tư pháp Hope Center</p>
                   </div>
                 </div>
               </Space>
@@ -444,10 +495,10 @@ const AdoptionPortal: React.FC = () => {
           >
             <Steps
               size="small"
-              current={-1}
+              current={isApproved ? 1 : 0}
               items={[
                 { title: '1. Nộp đơn đăng ký', description: 'Khai thông tin gia cảnh trực tuyến' },
-                { title: '2. Thẩm định hồ sơ', description: 'Xác minh hồ sơ lý lịch & tư pháp' },
+                { title: '2. Phê duyệt sơ bộ', description: 'Mở khóa hình ảnh chi tiết các bé' },
                 { title: '3. Phỏng vấn trực tiếp', description: 'Trao đổi tâm lý & định hướng nuôi dạy' },
                 { title: '4. Khảo sát gia cảnh', description: 'Kiểm tra thực tế không gian sống' },
                 { title: '5. Quyết định bàn giao', description: 'Hoàn tất thủ tục pháp lý bảo trợ' }
@@ -456,21 +507,135 @@ const AdoptionPortal: React.FC = () => {
             />
           </Card>
 
-          {/* Table: Applications List */}
-          <Card 
-            title={<span className="font-bold text-slate-800 flex items-center gap-2"><FileText size={18} className="text-rose-500" /> Lịch sử đăng ký nhận nuôi</span>}
-            variant="borderless"
-            style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-          >
-            <Table 
-              columns={columns} 
-              dataSource={applications} 
-              rowKey="id" 
-              loading={loadingApps}
-              pagination={applications.length > 5 ? { pageSize: 5 } : false}
-              locale={{ emptyText: 'Bạn chưa có hồ sơ đăng ký nhận nuôi nào.' }}
+          {/* Tabs Container */}
+          <div className="bg-white rounded-2xl shadow-xs border border-slate-100 p-6">
+            <Tabs 
+              activeKey={activeTab} 
+              onChange={key => setActiveTab(key)}
+              items={[
+                {
+                  key: 'children',
+                  label: <span className="font-bold text-sm">🏡 Danh sách các bé tại trung tâm</span>,
+                  children: (
+                    <div className="space-y-6">
+                      
+                      {/* Security Information Alert */}
+                      {!isApproved ? (
+                        <Alert
+                          message={<b style={{ color: '#b45309' }}>Quy chế Bảo mật và An toàn Trẻ em</b>}
+                          description="Để tuân thủ pháp luật về bảo vệ quyền trẻ em, toàn bộ tên thật và hình ảnh thực tế của các bé sẽ tạm thời ẩn danh cho đến khi đơn đăng ký của bạn được Ban Giám đốc phê duyệt bước 1. Hiện tại, bạn vẫn có thể gửi đơn đăng ký nguyện vọng nhận nuôi bé bất kỳ dựa trên tuổi, giới tính và mã số ẩn danh."
+                          type="warning"
+                          showIcon
+                          icon={<Lock className="text-amber-500" size={18} />}
+                          style={{ borderRadius: 12 }}
+                        />
+                      ) : (
+                        <Alert
+                          message={<b style={{ color: '#047857' }}>Hồ sơ Đăng ký Nhận nuôi đã được thông qua sơ bộ!</b>}
+                          description="Hồ sơ lý lịch của bạn đã được duyệt. Toàn bộ hình ảnh thực tế, tên thật cũng như hồ sơ y tế/gia cảnh của các bé đã được mở khóa hoàn toàn. Bạn có thể chọn bé cụ thể bên dưới để gửi yêu cầu nhận nuôi bé đó."
+                          type="success"
+                          showIcon
+                          icon={<Unlock className="text-emerald-500" size={18} />}
+                          style={{ borderRadius: 12 }}
+                        />
+                      )}
+
+                      {loadingChildren ? (
+                        <div className="text-center py-10"><Spin /> Loading...</div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {children.map((child: any) => (
+                            <Card 
+                              key={child.id}
+                              hoverable
+                              cover={
+                                <div className="relative h-64 w-full bg-slate-100 overflow-hidden flex items-center justify-center">
+                                  <Image 
+                                    src={getChildImageUrl(child)} 
+                                    alt={child.fullName} 
+                                    className="object-cover w-full h-full"
+                                    style={{ height: '100%', width: '100%', objectFit: 'cover' }}
+                                    wrapperStyle={{ width: '100%', height: '100%', display: 'block' }}
+                                    wrapperClassName="w-full h-full"
+                                    preview={isApproved ? {
+                                      mask: (
+                                        <div className="flex flex-col items-center justify-center text-xs text-white">
+                                          <EyeOutlined className="text-lg mb-1" />
+                                          <span>Xem ảnh đầy đủ</span>
+                                        </div>
+                                      )
+                                    } : false}
+                                    fallback="https://images.unsplash.com/photo-1595250912759-99446d5c6be2?q=80&w=300&auto=format&fit=crop"
+                                  />
+                                  {!isApproved && (
+                                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs flex flex-col items-center justify-center text-white p-4 text-center z-10 pointer-events-none">
+                                      <Lock className="w-8 h-8 mb-2 text-rose-300" />
+                                      <span className="text-xs font-bold uppercase tracking-wider">Hình ảnh đang khóa</span>
+                                      <span className="text-[10px] text-slate-300 mt-1">Phê duyệt hồ sơ để mở khóa</span>
+                                    </div>
+                                  )}
+                                </div>
+                              }
+                              style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid #f1f5f9' }}
+                            >
+                              <Card.Meta
+                                title={
+                                  <div className="flex justify-between items-center">
+                                    <span className="font-bold text-slate-900">{child.fullName}</span>
+                                    <Tag color={child.gender === 0 || child.gender === 'Male' ? 'blue' : 'pink'} className="text-[10px] font-bold rounded-sm">
+                                      {child.gender === 0 || child.gender === 'Male' ? 'Nam' : 'Nữ'}
+                                    </Tag>
+                                  </div>
+                                }
+                                description={
+                                  <Space direction="vertical" size={4} style={{ width: '100%', marginTop: 8 }}>
+                                    <Text type="secondary" className="text-xs">Sức khỏe: <b className="text-slate-700">{child.healthStatus || 'Khỏe mạnh'}</b></Text>
+                                    <Text type="secondary" className="text-xs">
+                                      Lý lịch: <span className="text-slate-600 line-clamp-1">{child.background || 'Thông tin bảo mật'}</span>
+                                    </Text>
+                                    
+                                    <Divider style={{ margin: '10px 0' }} />
+                                    
+                                    <Button 
+                                      type="primary" 
+                                      block 
+                                      onClick={() => startNewApplication(child.id)}
+                                      style={{ 
+                                        borderRadius: 8, 
+                                        fontWeight: 600,
+                                        background: isApproved ? '#10b981' : '#f43f5e',
+                                        borderColor: isApproved ? '#10b981' : '#f43f5e'
+                                      }}
+                                    >
+                                      {isApproved ? 'Gửi yêu cầu nhận nuôi bé này 💖' : 'Gửi đơn đăng ký nhận nuôi'}
+                                    </Button>
+                                  </Space>
+                                }
+                              />
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'history',
+                  label: <span className="font-bold text-sm">📄 Lịch sử đơn đăng ký của bạn</span>,
+                  children: (
+                    <Table 
+                      columns={columns} 
+                      dataSource={applications} 
+                      rowKey="id" 
+                      loading={loadingApps}
+                      pagination={applications.length > 5 ? { pageSize: 5 } : false}
+                      locale={{ emptyText: 'Bạn chưa có hồ sơ đăng ký nhận nuôi nào.' }}
+                    />
+                  ),
+                }
+              ]}
             />
-          </Card>
+          </div>
         </Space>
       )}
 
@@ -504,7 +669,7 @@ const AdoptionPortal: React.FC = () => {
               size="small"
               items={[
                 { title: 'Thông tin cá nhân', icon: <User size={16} /> },
-                { title: 'Khảo sát gia cảnh', icon: <Home size={16} /> },
+                { title: 'Chọn bé & Khảo sát', icon: <Home size={16} /> },
                 { title: 'Hồ sơ pháp lý', icon: <FolderOpen size={16} /> },
                 { title: 'Cam kết & Gửi', icon: <BadgeCheck size={16} /> }
               ]}
@@ -617,7 +782,7 @@ const AdoptionPortal: React.FC = () => {
                       >
                         {children.map((c: any) => (
                           <Select.Option key={c.id} value={c.id}>
-                            {c.fullName} ({c.gender === 0 || c.gender === 'Male' ? 'Nam' : 'Nữ'} - {c.healthStatus || 'Khỏe mạnh'})
+                            {isApproved ? c.fullName : `Trẻ em ẩn danh ${c.id.substring(0, 8).toUpperCase()}`} ({c.gender === 0 || c.gender === 'Male' ? 'Nam' : 'Nữ'} - {c.healthStatus || 'Khỏe mạnh'})
                           </Select.Option>
                         ))}
                       </Select>
@@ -678,7 +843,7 @@ const AdoptionPortal: React.FC = () => {
                   </div>
 
                   <div className="space-y-4">
-                    {/* Doc 1: Identity Card front & back */}
+                    {/* Doc 1 */}
                     <div className="flex flex-wrap items-center justify-between p-5 border border-slate-200 rounded-2xl bg-slate-50/50 gap-4">
                       <div className="flex items-center gap-4">
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
@@ -706,7 +871,7 @@ const AdoptionPortal: React.FC = () => {
                       </Button>
                     </div>
 
-                    {/* Doc 2: Financial statement paper */}
+                    {/* Doc 2 */}
                     <div className="flex flex-wrap items-center justify-between p-5 border border-slate-200 rounded-2xl bg-slate-50/50 gap-4">
                       <div className="flex items-center gap-4">
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
@@ -734,7 +899,7 @@ const AdoptionPortal: React.FC = () => {
                       </Button>
                     </div>
 
-                    {/* Doc 3: Background clean checking certificate */}
+                    {/* Doc 3 */}
                     <div className="flex flex-wrap items-center justify-between p-5 border border-slate-200 rounded-2xl bg-slate-50/50 gap-4">
                       <div className="flex items-center gap-4">
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
@@ -980,7 +1145,7 @@ const AdoptionPortal: React.FC = () => {
                     ? 4 
                     : selectedApp.status === 2 || selectedApp.status === 'Rejected' 
                       ? 1 
-                      : 1 // Pending is in review stage
+                      : 1
                 }
                 items={[
                   { 

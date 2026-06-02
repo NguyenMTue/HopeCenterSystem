@@ -4,6 +4,7 @@ using backend.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.IO;
 
 namespace backend.Infrastructure.Data;
 
@@ -823,9 +824,42 @@ public class ApplicationDbContextInitialiser
         {
             var random = new Random(2026);
             var attachments = new List<Attachment>();
-            
-            // 1. Đính kèm file cho Trẻ em (Lấy 5 bé đầu tiên)
-            var childrenForDocs = await _context.Children.Take(5).ToListAsync();
+
+            var maleFallback = new List<string>
+            {
+                "https://icdn.dantri.com.vn/2017/screen-shot-2017-01-21-at-10-21-23-pm-1485012132149.png",
+                "https://kenh14cdn.com/2017/be-trai-2-1485058669494.jpg",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQdD_h_WJQT9lL2PJuKBra6n7OGmAsLtPmKNw&s",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRPg5QKftKwrjZz6WXNFskPHwgfuGImL_l9Xg&s",
+                "https://sohanews.sohacdn.com/zoom/480_300/160588918557773824/2023/5/4/photo1683169576919-1683169577002830572929.jpg",
+                "https://demcanada.com/wp-content/uploads/2025/10/hinh-anh-em-be-trai-de-thuong-1.jpg",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR9QOq4iM1PnpNCfHyUUs_pefdnB21rOLx0oQ&s",
+                "https://icdn.dantri.com.vn/063efc1ba7/2016/10/14/chan-dung-chau-phuc-bi-mat-tich-khi-di-hoc-vao-ngay-12-10-vua-qua-anh-do-gia-dinh-nan-nhan-cung-cap-1476457613421.jpg",
+                "https://nld.mediacdn.vn/thumb_w/698/291774122806476800/2023/5/29/mat-tich-1-1685352618015484942537.jpg",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSfks4UUPZAS7-bdbzDrYeZgMeRi3lKFbutUw&s",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTgtE5OGer78nqaDhYwdal-cvwPD4cThlZTMhrIdVy3MQ&s"
+            };
+
+            var femaleFallback = new List<string>
+            {
+                "https://bizweb.dktcdn.net/100/175/849/files/chup-anh-the-dep-cho-hoc-sinh-02.jpg?v=1609569926960",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSWBoHQBEH4IYavTJsOR_NffDvUOxaW_mMZnQ&s",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR-r_KOdR1Kq33gLVjE83F_RYro-GC6RllcKg&s",
+                "https://img.freepik.com/premium-photo/portrait-asian-child-background_296537-9746.jpg",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRPrfF1qzJe_ueItigmcxab34qjVkEn-2ldng&s",
+                "https://www.shutterstock.com/image-photo/happy-cute-asian-girl-portrait-260nw-157109024.jpg",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQij-4YygltV261MhC8BZzA6B5MqylfvLwuFw&s",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQjdVEXuAmeyNR674pbEDcSH5YNIE_sAdtp-w&s",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSFZRa0pID0C7egf9uiY6lME0GJensl8jP0zg&s",
+                "https://imgs.vietnamnet.vn/Images/2015/09/01/14/20150901143006-5.jpg?width=0&s=D3mYOe_kQpYgGmwRwWzyYw",
+                "https://afamilycdn.com/2018/7/7/1-1-1530975935139557582555.jpg"
+            };
+
+            var maleImages = ReadImageLinks("male.txt", maleFallback);
+            var femaleImages = ReadImageLinks("female.txt", femaleFallback);
+
+            // 1. Đính kèm file cho Trẻ em (Tất cả trẻ)
+            var childrenForDocs = await _context.Children.ToListAsync();
             foreach (var child in childrenForDocs)
             {
                 // File Giấy khai sinh
@@ -840,13 +874,23 @@ public class ApplicationDbContextInitialiser
                     UploadedAt = DateTime.UtcNow.AddDays(-random.Next(10, 100))
                 });
                 
-                // File Ảnh đại diện
+                // File Ảnh đại diện ngẫu nhiên
+                string avatarPath;
+                if (child.Gender == Gender.Male)
+                {
+                    avatarPath = maleImages[random.Next(maleImages.Count)];
+                }
+                else
+                {
+                    avatarPath = femaleImages[random.Next(femaleImages.Count)];
+                }
+
                 attachments.Add(new Attachment
                 {
                     TargetId = child.Id,
                     TargetType = AttachmentTargetType.Child,
                     FileName = $"Avatar_{child.FullName.Replace(" ", "_")}.jpg",
-                    FilePath = $"/uploads/children/avatars/{Guid.NewGuid()}.jpg",
+                    FilePath = avatarPath,
                     FileType = "image/jpeg",
                     FileSize = random.Next(100, 500) * 1024, // Random từ 100KB đến 500KB
                     UploadedAt = DateTime.UtcNow.AddDays(-random.Next(10, 100))
@@ -1074,5 +1118,50 @@ public class ApplicationDbContextInitialiser
             _context.Notifications.AddRange(notifications);
             await _context.SaveChangesAsync();
         }
+    }
+
+    private List<string> ReadImageLinks(string fileName, List<string> fallbacks)
+    {
+        try
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null)
+            {
+                var picturePath = Path.Combine(dir.FullName, "picture", fileName);
+                if (File.Exists(picturePath))
+                {
+                    var lines = File.ReadAllLines(picturePath)
+                        .Select(l => l.Trim())
+                        .Where(l => !string.IsNullOrEmpty(l) && (l.StartsWith("http://") || l.StartsWith("https://")))
+                        .ToList();
+                    if (lines.Any())
+                    {
+                        return lines;
+                    }
+                }
+                var parentDir = dir.Parent;
+                if (parentDir != null)
+                {
+                    var slnPicturePath = Path.Combine(parentDir.FullName, "picture", fileName);
+                    if (File.Exists(slnPicturePath))
+                    {
+                        var lines = File.ReadAllLines(slnPicturePath)
+                            .Select(l => l.Trim())
+                            .Where(l => !string.IsNullOrEmpty(l) && (l.StartsWith("http://") || l.StartsWith("https://")))
+                            .ToList();
+                        if (lines.Any())
+                        {
+                            return lines;
+                        }
+                    }
+                }
+                dir = dir.Parent;
+            }
+        }
+        catch
+        {
+            // Ignore
+        }
+        return fallbacks;
     }
 }
