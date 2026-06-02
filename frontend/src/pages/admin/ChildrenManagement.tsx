@@ -5,6 +5,7 @@ import dayjs from 'dayjs';
 // IMPORT hàm gọi API (Đảm bảo bạn đã tạo file childService.ts như hướng dẫn trước đó)
 // Tìm dòng import này ở đầu file
 import { getChildrenList, deleteChild } from '../../services/childService';
+import apiClient from '../../services/apiClient';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -13,6 +14,7 @@ const ChildrenManagement: React.FC = () => {
   // 1. QUẢN LÝ STATES
   const [data, setData] = useState<any[]>([]); // Khởi tạo mảng rỗng thay vì initialData
   const [loading, setLoading] = useState(false); // Trạng thái đang tải dữ liệu
+  const [isAdopter, setIsAdopter] = useState(false);
   const [searchText, setSearchText] = useState(''); 
   
   const [isModalOpen, setIsModalOpen] = useState(false); 
@@ -67,6 +69,18 @@ const ChildrenManagement: React.FC = () => {
 
   // Tự động chạy hàm fetchChildrenData khi component vừa được render lần đầu
   useEffect(() => {
+    const fetchUserRole = async () => {
+      try {
+        const response = await apiClient.get('/api/Users/me');
+        const roles = response.data.roles || [];
+        if (roles.includes('Adopter')) {
+          setIsAdopter(true);
+        }
+      } catch (error) {
+        console.error('Failed to fetch user roles', error);
+      }
+    };
+    fetchUserRole();
     fetchChildrenData();
   }, []);
 
@@ -159,7 +173,7 @@ const handleDelete = async (id: string) => {
         return <Tag color={color} style={{ fontWeight: 600, padding: '2px 10px', borderRadius: 6 }}>{status}</Tag>;
       },
     },
-    {
+    ...(!isAdopter ? [{
       title: 'Hành động',
       key: 'action',
       width: 150,
@@ -180,7 +194,7 @@ const handleDelete = async (id: string) => {
           </Popconfirm>
         </Space>
       ),
-    },
+    }] : [])
   ];
 
   return (
@@ -188,15 +202,17 @@ const handleDelete = async (id: string) => {
       {/* HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <Title level={2} style={{ margin: 0, color: '#1e293b', fontSize: 28 }}>Quản lý Hồ sơ Trẻ em</Title>
-        <Button 
-          type="primary" 
-          size="large" 
-          icon={<PlusOutlined />} 
-          style={{ background: '#f43f5e', fontWeight: 600, height: 45, borderRadius: 10 }}
-          onClick={() => openEditModal()} 
-        >
-          Thêm hồ sơ mới
-        </Button>
+        {!isAdopter && (
+          <Button 
+            type="primary" 
+            size="large" 
+            icon={<PlusOutlined />} 
+            style={{ background: '#f43f5e', fontWeight: 600, height: 45, borderRadius: 10 }}
+            onClick={() => openEditModal()} 
+          >
+            Thêm hồ sơ mới
+          </Button>
+        )}
       </div>
 
       {/* TÌM KIẾM */}
@@ -219,7 +235,7 @@ const handleDelete = async (id: string) => {
         rowKey="id" 
         pagination={{ pageSize: 5, showSizeChanger: false }} 
         scroll={{ x: 1000 }} 
-        variant="bordered"
+        bordered={true}
         loading={loading} 
       />
 

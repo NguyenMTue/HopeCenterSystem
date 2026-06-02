@@ -4,6 +4,8 @@ using backend.Application.AdoptionApplications.Commands.UpdateAdoptionApplicatio
 using backend.Application.AdoptionApplications.Queries.GetAdoptionApplicationById;
 using backend.Application.AdoptionApplications.Queries.GetAdoptionApplications;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
+using backend.Application.Common.Interfaces;
 
 namespace backend.Web.Endpoints;
 
@@ -13,6 +15,7 @@ public class AdoptionApplications : IEndpointGroup
     {
         groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetAdoptionApplications);
+        groupBuilder.MapGet(GetMyAdoptionApplications, "my");
         groupBuilder.MapGet(GetAdoptionApplicationById, "{id}");
         groupBuilder.MapPost(CreateAdoptionApplication);
         groupBuilder.MapPut(UpdateAdoptionApplication, "{id}");
@@ -48,5 +51,43 @@ public class AdoptionApplications : IEndpointGroup
     {
         await sender.Send(new DeleteAdoptionApplicationCommand(id));
         return TypedResults.NoContent();
+    }
+
+    public static async Task<Ok<List<AdoptionApplicationDto>>> GetMyAdoptionApplications(
+        ISender sender, 
+        IUser currentUser, 
+        IApplicationDbContext context)
+    {
+        var userIdStr = currentUser.Id;
+        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var accountId))
+        {
+            return TypedResults.Ok(new List<AdoptionApplicationDto>());
+        }
+
+        var adopter = await context.Adopters.FirstOrDefaultAsync(a => a.AccountId == accountId);
+        if (adopter == null)
+        {
+            return TypedResults.Ok(new List<AdoptionApplicationDto>());
+        }
+
+        var list = await context.AdoptionApplications
+            .Where(a => a.AdopterId == adopter.Id)
+            .Include(a => a.Child)
+            .Select(a => new AdoptionApplicationDto
+            {
+                Id = a.Id,
+                AdopterId = a.AdopterId,
+                AdopterName = adopter.FullName,
+                ChildId = a.ChildId,
+                ChildName = a.Child != null ? a.Child.FullName : null,
+                SubmitDate = a.SubmitDate,
+                Status = a.Status,
+                Reason = a.Reason,
+                Notes = a.Notes
+            })
+            .OrderByDescending(a => a.SubmitDate)
+            .ToListAsync();
+
+        return TypedResults.Ok(list);
     }
 }

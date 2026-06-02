@@ -1,5 +1,6 @@
-﻿using backend.Application.Common.Interfaces;
+using backend.Application.Common.Interfaces;
 using backend.Infrastructure.Identity;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -39,6 +40,10 @@ public class Users : IEndpointGroup
         // Endpoint chẩn đoán
         groupBuilder.MapPost(TestLogin, "test-login")
             .WithName("TestLogin");
+
+        // Custom Login endpoint supporting both email and username
+        groupBuilder.MapPost(LoginCustom, "login-custom")
+            .WithName("LoginCustom");
     }
 
     public static async Task<Created<Guid>> RegisterUser(ISender sender, RegisterUserCommand command)
@@ -95,6 +100,40 @@ public class Users : IEndpointGroup
             IsNotAllowed = result.IsNotAllowed,
             RequiresTwoFactor = result.RequiresTwoFactor
         });
+    }
+
+    public static async Task<IResult> LoginCustom(
+        [FromBody] LoginRequest request,
+        [FromQuery] bool? useCookies,
+        [FromQuery] bool? useSessionCookies,
+        UserManager<Account> userManager,
+        SignInManager<Account> signInManager)
+    {
+        var user = await userManager.FindByNameAsync(request.Email) 
+                   ?? await userManager.FindByEmailAsync(request.Email);
+                   
+        if (user == null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var useCookie = useCookies == true || useSessionCookies == true;
+        var isPersistent = useCookies == true && useSessionCookies != true;
+
+        var result = await signInManager.PasswordSignInAsync(user, request.Password, isPersistent, lockoutOnFailure: true);
+
+        if (!result.Succeeded)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (useCookie)
+        {
+            return TypedResults.Ok();
+        }
+
+        var principal = await signInManager.CreateUserPrincipalAsync(user);
+        return TypedResults.SignIn(principal, authenticationScheme: IdentityConstants.BearerScheme);
     }
 
     public class LoginRequest

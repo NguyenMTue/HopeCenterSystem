@@ -94,14 +94,14 @@ public class ApplicationDbContextInitialiser
         // ==========================================
         
         // 2.1 Tạo Admin (1 người)
-        var adminEmail = "admin@hopecenter.com";
+        var adminEmail = "tue1@gmail.com";
         var adminUser = await _userManager.FindByEmailAsync(adminEmail);
         
         if (adminUser == null)
         {
             _logger.LogInformation("Đang tạo tài khoản Admin mặc định...");
             var adminAccount = new Account { UserName = adminEmail, Email = adminEmail, IsActive = true, EmailConfirmed = true };
-            var result = await _userManager.CreateAsync(adminAccount, "Admin@123!");
+            var result = await _userManager.CreateAsync(adminAccount, "Admin@123");
             
             if (result.Succeeded)
             {
@@ -130,11 +130,11 @@ public class ApplicationDbContextInitialiser
         }
 
         // 2.2 Tạo Giám đốc (1 người)
-        var directorEmail = "director@hopecenter.com";
+        var directorEmail = "tue2@gmail.com";
         var directorAccount = new Account { UserName = directorEmail, Email = directorEmail, IsActive = true, EmailConfirmed = true };
         if (!await _userManager.Users.AnyAsync(u => u.Email == directorEmail))
         {
-            await _userManager.CreateAsync(directorAccount, "Director@123!");
+            await _userManager.CreateAsync(directorAccount, "Director@123");
             await _userManager.AddToRoleAsync(directorAccount, "Director");
 
             _context.Employees.Add(new Employee
@@ -157,7 +157,7 @@ public class ApplicationDbContextInitialiser
         // 3.1 Tạo Quản lý trung tâm (2 người)
         for (int i = 1; i <= 2; i++)
         {
-            var username = $"manager{i}";
+            var username = i == 1 ? "tue3" : $"manager{i}";
             var managerAccount = new Account { UserName = username, Email = $"{username}@hopecenter.com", IsActive = true, EmailConfirmed = true };
             
             if (!await _userManager.Users.AnyAsync(u => u.UserName == managerAccount.UserName))
@@ -168,7 +168,7 @@ public class ApplicationDbContextInitialiser
                 _context.Employees.Add(new Employee
                 {
                     AccountId = managerAccount.Id,
-                    FullName = $"Quản Lý {i}",
+                    FullName = i == 1 ? "Quản Lý Tuệ 3" : $"Quản Lý {i}",
                     Position = "Quản lý phòng ban",
                     Phone = $"092200000{i}",
                     DOB = new DateTime(1985, 1, 1).AddYears(i)
@@ -192,18 +192,18 @@ public class ApplicationDbContextInitialiser
 
         for (int i = 0; i < 10; i++)
         {
-            var username = $"staff{i + 1}";
+            var username = i == 0 ? "tue4" : $"staff{i + 1}";
             var staffAccount = new Account { UserName = username, Email = $"{username}@hopecenter.com", IsActive = true, EmailConfirmed = true };
             
             if (!await _userManager.Users.AnyAsync(u => u.UserName == staffAccount.UserName))
             {
-                await _userManager.CreateAsync(staffAccount, "Staff@123!");
+                await _userManager.CreateAsync(staffAccount, "Staff@123");
                 await _userManager.AddToRoleAsync(staffAccount, "CareGiver");
 
                 _context.Employees.Add(new Employee
                 {
                     AccountId = staffAccount.Id,
-                    FullName = employeeNames[i],
+                    FullName = i == 0 ? "Nhân Viên Tuệ 4" : employeeNames[i],
                     Position = positions[i],
                     Phone = $"0933000{i:D3}", // Tạo SĐT giả lập: 0933000000, 0933000001...
                     DOB = new DateTime(1985, 1, 1).AddMonths(i * 15).AddDays(i * 7) // Tạo ngày sinh ngẫu nhiên
@@ -224,18 +224,18 @@ public class ApplicationDbContextInitialiser
 
         for (int i = 0; i < 10; i++)
         {
-            var username = $"adopter{i + 1}";
-            var adopterAccount = new Account { UserName = username, Email = $"{username}@gmail.com", IsActive = true, EmailConfirmed = true };
+            var username = i == 0 ? "tue5" : $"adopter{i + 1}";
+            var adopterAccount = new Account { UserName = username, Email = i == 0 ? "tue5@gmail.com" : $"{username}@gmail.com", IsActive = true, EmailConfirmed = true };
             
             if (!await _userManager.Users.AnyAsync(u => u.UserName == adopterAccount.UserName))
             {
-                await _userManager.CreateAsync(adopterAccount, "Adopter@123!");
+                await _userManager.CreateAsync(adopterAccount, "Adopter@123");
                 await _userManager.AddToRoleAsync(adopterAccount, "Adopter");
 
                 _context.Adopters.Add(new Adopter
                 {
                     AccountId = adopterAccount.Id,
-                    FullName = adopterNames[i],
+                    FullName = i == 0 ? "Người Nhận Nuôi Tuệ 5" : adopterNames[i],
                     IDCard = $"0480900012{i + 1:D2}", // Đảm bảo số CCCD từ 01 đến 10
                     FinancialStatus = i % 2 == 0 ? "Thu nhập ổn định (Mức khá)" : "Thu nhập trung bình",
                     MaritalStatus = i % 3 == 0 ? "Độc thân" : "Đã kết hôn",

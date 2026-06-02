@@ -1,0 +1,6 @@
+{
+  "name": "Hope Center",
+  "description": "Hệ thống Quản lý Bảo trợ và Nhận nuôi Trẻ em",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

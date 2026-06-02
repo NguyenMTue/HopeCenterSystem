@@ -54,55 +54,136 @@ const MainLayout: React.FC = () => {
     navigate('/login');
   };
 
-  const menuItems = [
-    // Menu cho Adopter
-    ...(userInfo?.userType === 'Adopter' ? [
-      {
-        key: 'group-adopter',
-        type: 'group' as const,
-        label: 'DÀNH CHO NGƯỜI NHẬN NUÔI',
-        children: [
-          { key: '/dashboard/adopter-portal', icon: <HeartOutlined />, label: 'Cổng thông tin' },
-          { key: '/dashboard/children', icon: <TeamOutlined />, label: 'Danh sách trẻ em' },
-          { key: '/dashboard/profile', icon: <UserOutlined />, label: 'Hồ sơ cá nhân' },
-        ],
-      },
-    ] : []),
+  const getMenuItems = () => {
+    if (!userInfo) return [];
 
-    // Menu cho Admin/Employee
-    ...(userInfo?.userType !== 'Adopter' ? [
-      {
-        key: 'group-1',
-        type: 'group' as const,
-        label: 'CHỨC NĂNG QUẢN LÝ',
-        children: [
-          { key: '/dashboard/children', icon: <HeartOutlined />, label: 'Quản lý Trẻ em' },
-          { key: '/dashboard/adoptions', icon: <FileTextOutlined />, label: 'Thẩm định Nhận nuôi' },
-          { key: '/dashboard/care-plans', icon: <MedicineBoxOutlined />, label: 'Kế hoạch Chăm sóc' },
-          { key: '/dashboard/incidents', icon: <WarningOutlined />, label: 'Báo cáo Sự cố' },
-        ],
-      },
-      {
-        key: 'group-2',
-        type: 'group' as const,
-        label: 'TÀI CHÍNH & VẬT TƯ',
-        children: [
-          { key: '/dashboard/donations', icon: <GiftOutlined />, label: 'Quản lý Tài trợ' },
-          { key: '/dashboard/supplies', icon: <AppstoreAddOutlined />, label: 'Quản lý Vật tư' },
-        ],
-      },
-      {
-        key: 'group-3',
-        type: 'group' as const,
-        label: 'HỆ THỐNG (ADMIN)',
-        children: [
-          { key: '/dashboard/employees', icon: <TeamOutlined />, label: 'Quản lý Nhân viên' },
-          { key: '/dashboard/roles', icon: <SafetyCertificateOutlined />, label: 'Phân quyền (Roles)' },
-          { key: '/dashboard/backup', icon: <DatabaseOutlined />, label: 'Sao lưu Dữ liệu' },
-        ],
-      },
-    ] : []),
-  ];
+    const roles = userInfo.roles || [];
+    const position = (userInfo.position || '').toLowerCase();
+
+    // 1. Administrator Workspace
+    if (roles.includes('Administrator')) {
+      return [
+        {
+          key: 'group-admin',
+          type: 'group' as const,
+          label: 'HỆ THỐNG (ADMIN)',
+          children: [
+            { key: '/dashboard/employees', icon: <TeamOutlined />, label: 'Quản lý Nhân viên' },
+            { key: '/dashboard/roles', icon: <SafetyCertificateOutlined />, label: 'Phân quyền (Roles)' },
+            { key: '/dashboard/backup', icon: <DatabaseOutlined />, label: 'Sao lưu Dữ liệu' },
+            { key: '/dashboard/profile', icon: <UserOutlined />, label: 'Hồ sơ cá nhân' },
+          ],
+        }
+      ];
+    }
+
+    // 2. Director Workspace
+    if (roles.includes('Director')) {
+      return [
+        {
+          key: 'group-director',
+          type: 'group' as const,
+          label: 'BAN GIÁM ĐỐC',
+          children: [
+            { key: '/dashboard/children', icon: <HeartOutlined />, label: 'Quản lý Trẻ em' },
+            { key: '/dashboard/adoptions', icon: <FileTextOutlined />, label: 'Thẩm định Nhận nuôi' },
+            { key: '/dashboard/care-plans', icon: <MedicineBoxOutlined />, label: 'Kế hoạch Chăm sóc' },
+            { key: '/dashboard/incidents', icon: <WarningOutlined />, label: 'Báo cáo Sự cố' },
+            { key: '/dashboard/donations', icon: <GiftOutlined />, label: 'Quản lý Tài trợ' },
+            { key: '/dashboard/supplies', icon: <AppstoreAddOutlined />, label: 'Quản lý Vật tư' },
+          ],
+        }
+      ];
+    }
+
+    // 3. Manager Workspace
+    if (roles.includes('Manager')) {
+      return [
+        {
+          key: 'group-manager',
+          type: 'group' as const,
+          label: 'BAN QUẢN LÝ',
+          children: [
+            { key: '/dashboard/children', icon: <HeartOutlined />, label: 'Quản lý Trẻ em' },
+            { key: '/dashboard/adoptions', icon: <FileTextOutlined />, label: 'Thẩm định Nhận nuôi' },
+            { key: '/dashboard/care-plans', icon: <MedicineBoxOutlined />, label: 'Kế hoạch Chăm sóc' },
+            { key: '/dashboard/incidents', icon: <WarningOutlined />, label: 'Báo cáo Sự cố' },
+            { key: '/dashboard/donations', icon: <GiftOutlined />, label: 'Quản lý Tài trợ' },
+            { key: '/dashboard/supplies', icon: <AppstoreAddOutlined />, label: 'Quản lý Vật tư' },
+          ],
+        }
+      ];
+    }
+
+    // 4. CareGiver Role (Check position for sub-roles)
+    if (roles.includes('CareGiver')) {
+      // 4.1. Medical Staff (Y tá, điều dưỡng...)
+      if (position.includes('y tá') || position.includes('điều dưỡng') || position.includes('y tế') || position.includes('bác sĩ')) {
+        return [
+          {
+            key: 'group-medical',
+            type: 'group' as const,
+            label: 'Y TẾ & SỨC KHỎE',
+            children: [
+              { key: '/dashboard/children', icon: <HeartOutlined />, label: 'Theo dõi Sức khỏe Trẻ' },
+              { key: '/dashboard/care-plans', icon: <MedicineBoxOutlined />, label: 'Hồ sơ Y tế & Bệnh án' },
+              { key: '/dashboard/incidents', icon: <WarningOutlined />, label: 'Báo cáo Sự cố Y tế' },
+            ],
+          }
+        ];
+      }
+
+      // 4.2. Accountant & Inventory Staff (Kế toán, thủ kho, nhà bếp, bảo vệ...)
+      if (position.includes('kế toán') || position.includes('thủ kho') || position.includes('kho') || position.includes('hậu cần') || position.includes('bếp') || position.includes('vệ')) {
+        return [
+          {
+            key: 'group-inventory',
+            type: 'group' as const,
+            label: 'TÀI CHÍNH & VẬT TƯ',
+            children: [
+              { key: '/dashboard/donations', icon: <GiftOutlined />, label: 'Quản lý Tài trợ' },
+              { key: '/dashboard/supplies', icon: <AppstoreAddOutlined />, label: 'Quản lý Kho Vật tư' },
+            ],
+          }
+        ];
+      }
+
+      // 4.3. Standard CareGiver (Bảo mẫu)
+      return [
+        {
+          key: 'group-caregiver',
+          type: 'group' as const,
+          label: 'CA TRỰC BẢO MẪU',
+          children: [
+            { key: '/dashboard/children', icon: <HeartOutlined />, label: 'Ca trực & Điểm danh' },
+            { key: '/dashboard/care-plans', icon: <MedicineBoxOutlined />, label: 'Checklist Sinh hoạt' },
+            { key: '/dashboard/incidents', icon: <WarningOutlined />, label: 'Báo cáo Sự cố' },
+            { key: '/dashboard/supplies', icon: <AppstoreAddOutlined />, label: 'Yêu cầu Vật tư' },
+          ],
+        }
+      ];
+    }
+
+    // 5. Adopter Workspace
+    if (roles.includes('Adopter')) {
+      return [
+        {
+          key: 'group-adopter',
+          type: 'group' as const,
+          label: 'NGƯỜI NHẬN NUÔI',
+          children: [
+            { key: '/dashboard/adopter-portal', icon: <HeartOutlined />, label: 'Cổng thông tin' },
+            { key: '/dashboard/children', icon: <TeamOutlined />, label: 'Danh sách trẻ em' },
+            { key: '/dashboard/profile', icon: <UserOutlined />, label: 'Hồ sơ cá nhân' },
+          ],
+        }
+      ];
+    }
+
+    return [];
+  };
+
+  const menuItems = getMenuItems();
 
   const userMenu = [
     { key: 'profile', icon: <UserOutlined />, label: 'Hồ sơ cá nhân', onClick: () => navigate('/dashboard/profile') },

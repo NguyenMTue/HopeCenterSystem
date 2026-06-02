@@ -37,9 +37,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => {
     console.log('--- LOGIN ATTEMPT ---');
     console.log('Data being sent:', { email: values.username, password: values.password });
     try {
-      // Sửa: Đường dẫn Login trong Identity API mặc định được map vào /api/Users/login 
-      // do cơ chế MapEndpoints của Backend
-      const response = await apiClient.post('/api/Users/login', {
+      // Sửa: Sử dụng endpoint custom để hỗ trợ đăng nhập cả bằng username và email
+      const response = await apiClient.post('/api/Users/login-custom', {
         email: values.username,
         password: values.password
       });
@@ -123,7 +122,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => {
       </div>
 
       <Card 
-        variant="none" 
+        variant="borderless" 
         style={{ 
           width: '100%', 
           maxWidth: '500px', 

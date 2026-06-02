@@ -153,7 +153,7 @@ const ProfilePage: React.FC = () => {
 
           <div style={{ marginTop: 40, background: '#f8fafc', padding: 24, borderRadius: 12, border: '1px dashed #cbd5e1' }}>
             <Title level={5} style={{ marginTop: 0 }}>Bảo mật tài khoản</Title>
-            <Text type="secondary" block style={{ marginBottom: 16 }}>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
               Bạn nên thường xuyên thay đổi mật khẩu để đảm bảo an toàn cho tài khoản của mình.
             </Text>
             <Button 
