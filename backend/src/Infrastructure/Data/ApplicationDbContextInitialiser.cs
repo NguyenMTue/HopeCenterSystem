@@ -472,24 +472,41 @@ public class ApplicationDbContextInitialiser
                     ChildId = child.Id,
                     // Khám từ 1 đến 5 ngày sau khi được tiếp nhận vào trung tâm
                     CheckupDate = child.AdmissionDate.AddDays(random.Next(1, 5)), 
-                    Diagnosis = "Khám sức khỏe tổng quát ban đầu",
+                    Diagnosis = MedicalDiagnoses.GeneralCheckup,
                     Treatment = "Bổ sung vitamin, thiết lập chế độ dinh dưỡng theo độ tuổi.",
                     DoctorName = doctors[random.Next(doctors.Count)],
                     Notes = "Thể trạng cơ bản ổn định lúc tiếp nhận."
                 });
 
-                // 2. Tạo thêm hồ sơ bệnh án cho những bé đang nằm viện (Hospitalized)
-                if (child.Status == ChildStatus.Hospitalized)
+                // 2. Tạo thêm hồ sơ bệnh án cho những bé đang nằm viện (Hospitalized) hoặc một vài bé ở Khu Mầm Non cần theo dõi y tế/uống thuốc
+                if (child.Status == ChildStatus.Hospitalized || child.FullName == "Trần Bảo Châu" || child.FullName == "Lê Hoàng Bách")
                 {
+                    string diagnosis = MedicalDiagnoses.RespiratoryInfection;
+                    string treatment = "Sử dụng kháng sinh theo phác đồ, truyền dịch tĩnh mạch và theo dõi tại phòng Y tế.";
+                    string notes = "Bé có dấu hiệu sốt và lười ăn, cần theo dõi nhiệt độ 4 tiếng/lần.";
+
+                    if (child.FullName == "Trần Bảo Châu")
+                    {
+                        diagnosis = MedicalDiagnoses.FeverAndCough;
+                        treatment = "Uống thuốc hạ sốt Hapacol 150mg khi sốt > 38.5 độ (cách 4-6 tiếng), siro ho thảo dược Prospan 2.5ml x 3 lần/ngày.";
+                        notes = "Cần theo dõi nhiệt độ và cho uống siro sau ăn.";
+                    }
+                    else if (child.FullName == "Lê Hoàng Bách")
+                    {
+                        diagnosis = MedicalDiagnoses.ProbioticsAndZinc;
+                        treatment = "Uống men vi sinh Enterogermina 1 ống/ngày, bổ sung kẽm Biolizin 1ml/ngày sau bữa ăn sáng.";
+                        notes = "Uống sau ăn sáng 30 phút.";
+                    }
+
                     medicalRecords.Add(new MedicalRecord
                     {
                         ChildId = child.Id,
-                        // Khám trong vòng 30 ngày đổ lại
-                        CheckupDate = DateTime.UtcNow.AddDays(-random.Next(1, 30)), 
-                        Diagnosis = child.HealthStatus ?? "Viêm đường hô hấp / Suy dinh dưỡng",
-                        Treatment = "Sử dụng kháng sinh theo phác đồ, truyền dịch tĩnh mạch và theo dõi tại phòng Y tế.",
+                        // Khám trong vòng 15 ngày đổ lại
+                        CheckupDate = DateTime.UtcNow.AddDays(-random.Next(1, 15)), 
+                        Diagnosis = diagnosis,
+                        Treatment = treatment,
                         DoctorName = doctors[random.Next(doctors.Count)],
-                        Notes = "Bé có dấu hiệu sốt và lười ăn, cần theo dõi nhiệt độ 4 tiếng/lần."
+                        Notes = notes
                     });
                 }
             }
@@ -1162,40 +1179,76 @@ public class ApplicationDbContextInitialiser
                 var dailyTasks = new List<DailyCareTask>();
                 var today = DateTime.UtcNow.Date;
 
-                // Các task mẫu
-                var morningTasks = new List<(string Name, string Type)>
-                {
-                    ("Cho trẻ ăn sáng (Cháo yến mạch dinh dưỡng)", "BasicCare"),
-                    ("Lau mặt và vệ sinh răng miệng cho trẻ", "BasicCare"),
-                    ("Uống thuốc bổ sung Vitamin D hàng ngày", "MedicalCare")
-                };
-
-                var noonTasks = new List<(string Name, string Type)>
-                {
-                    ("Bữa ăn trưa (Súp rau củ thịt băm + Cơm nhão)", "BasicCare"),
-                    ("Cho uống sữa bột công thức", "BasicCare"),
-                    ("Đo thân nhiệt và ghi nhận sức khỏe", "MedicalCare"),
-                    ("Uống thuốc ho (siro ho thảo dược) sau ăn", "MedicalCare")
-                };
-
-                var afternoonTasks = new List<(string Name, string Type)>
-                {
-                    ("Vận động nhẹ nhàng và tắm nắng chiều", "BasicCare"),
-                    ("Vệ sinh cơ thể, tắm rửa thay đồ sạch", "BasicCare"),
-                    ("Uống sữa chua / Ăn xế bổ sung lợi khuẩn", "BasicCare")
-                };
-
-                var nightTasks = new List<(string Name, string Type)>
-                {
-                    ("Bữa ăn tối (Cháo gà hạt sen)", "BasicCare"),
-                    ("Uống thuốc an thần/thuốc bổ trước khi ngủ", "MedicalCare"),
-                    ("Đọc truyện/Nghe nhạc nhẹ và dỗ trẻ ngủ ngon", "BasicCare")
-                };
+                // Load all medical records for the seeded nursery children
+                var childMedicalRecords = await _context.MedicalRecords
+                    .Where(mr => mr.ChildId != null)
+                    .ToListAsync();
 
                 foreach (var child in mamNonChildren)
                 {
-                    // Thêm các task Buổi Sáng
-                    foreach (var t in morningTasks)
+                    // Find active diagnosis (prefer specific illness over general checkup)
+                    var records = childMedicalRecords.Where(r => r.ChildId == child.Id).ToList();
+                    var activeDiagnosis = records
+                        .Where(r => r.Diagnosis != MedicalDiagnoses.GeneralCheckup)
+                        .Select(r => r.Diagnosis)
+                        .FirstOrDefault() ?? MedicalDiagnoses.GeneralCheckup;
+
+                    // Core basic care tasks (common to all nursery kids)
+                    var morningTasksForChild = new List<(string Name, string Type)>
+                    {
+                        ("Cho trẻ ăn sáng (Cháo yến mạch dinh dưỡng)", "BasicCare"),
+                        ("Lau mặt và vệ sinh răng miệng cho trẻ", "BasicCare")
+                    };
+
+                    var noonTasksForChild = new List<(string Name, string Type)>
+                    {
+                        ("Bữa ăn trưa (Súp rau củ thịt băm + Cơm nhão)", "BasicCare"),
+                        ("Cho uống sữa bột công thức", "BasicCare")
+                    };
+
+                    var afternoonTasksForChild = new List<(string Name, string Type)>
+                    {
+                        ("Vận động nhẹ nhàng và tắm nắng chiều", "BasicCare"),
+                        ("Vệ sinh cơ thể, tắm rửa thay đồ sạch", "BasicCare"),
+                        ("Uống sữa chua / Ăn xế bổ sung lợi khuẩn", "BasicCare")
+                    };
+
+                    var nightTasksForChild = new List<(string Name, string Type)>
+                    {
+                        ("Bữa ăn tối (Cháo gà hạt sen)", "BasicCare"),
+                        ("Đọc truyện/Nghe nhạc nhẹ và dỗ trẻ ngủ ngon", "BasicCare")
+                    };
+
+                    // Customize medical care tasks based on active diagnosis
+                    if (activeDiagnosis == MedicalDiagnoses.FeverAndCough)
+                    {
+                        morningTasksForChild.Add(("Cho uống siro ho thảo dược Prospan (2.5ml) sau ăn sáng", "MedicalCare"));
+                        noonTasksForChild.Add(("Đo thân nhiệt và uống thuốc hạ sốt Hapacol 150mg (nếu sốt > 38.5 độ)", "MedicalCare"));
+                        noonTasksForChild.Add(("Cho uống siro ho thảo dược Prospan (2.5ml) sau ăn trưa", "MedicalCare"));
+                        nightTasksForChild.Add(("Cho uống siro ho thảo dược Prospan (2.5ml) trước khi ngủ", "MedicalCare"));
+                    }
+                    else if (activeDiagnosis == MedicalDiagnoses.ProbioticsAndZinc)
+                    {
+                        morningTasksForChild.Add(("Cho uống men vi sinh Enterogermina (1 ống) sau ăn sáng", "MedicalCare"));
+                        morningTasksForChild.Add(("Cho uống Kẽm Biolizin (1ml) sau ăn sáng", "MedicalCare"));
+                        noonTasksForChild.Add(("Đo thân nhiệt và ghi nhận sức khỏe", "MedicalCare"));
+                    }
+                    else if (activeDiagnosis == MedicalDiagnoses.RespiratoryInfection)
+                    {
+                        morningTasksForChild.Add(("Cho uống thuốc kháng sinh theo phác đồ bác sĩ", "MedicalCare"));
+                        noonTasksForChild.Add(("Đo thân nhiệt và ghi nhận sức khỏe", "MedicalCare"));
+                        noonTasksForChild.Add(("Cho uống siro ho thảo dược sau ăn trưa", "MedicalCare"));
+                        nightTasksForChild.Add(("Theo dõi nhiệt độ và cho uống thuốc bổ/kháng sinh trước khi ngủ", "MedicalCare"));
+                    }
+                    else
+                    {
+                        // Healthy child (GeneralCheckup)
+                        morningTasksForChild.Add(("Uống thuốc bổ sung Vitamin D hàng ngày", "MedicalCare"));
+                        noonTasksForChild.Add(("Đo thân nhiệt và ghi nhận sức khỏe", "MedicalCare"));
+                    }
+
+                    // Add Morning tasks
+                    foreach (var t in morningTasksForChild)
                     {
                         dailyTasks.Add(new DailyCareTask
                         {
@@ -1209,8 +1262,8 @@ public class ApplicationDbContextInitialiser
                         });
                     }
 
-                    // Thêm các task Buổi Trưa
-                    foreach (var t in noonTasks)
+                    // Add Noon tasks
+                    foreach (var t in noonTasksForChild)
                     {
                         dailyTasks.Add(new DailyCareTask
                         {
@@ -1224,8 +1277,8 @@ public class ApplicationDbContextInitialiser
                         });
                     }
 
-                    // Thêm các task Buổi Chiều
-                    foreach (var t in afternoonTasks)
+                    // Add Afternoon tasks
+                    foreach (var t in afternoonTasksForChild)
                     {
                         dailyTasks.Add(new DailyCareTask
                         {
@@ -1239,8 +1292,8 @@ public class ApplicationDbContextInitialiser
                         });
                     }
 
-                    // Thêm các task Buổi Tối
-                    foreach (var t in nightTasks)
+                    // Add Night tasks
+                    foreach (var t in nightTasksForChild)
                     {
                         dailyTasks.Add(new DailyCareTask
                         {
@@ -1360,5 +1413,13 @@ public class ApplicationDbContextInitialiser
             // Ignore
         }
         return fallbacks;
+    }
+
+    public static class MedicalDiagnoses
+    {
+        public const string GeneralCheckup = "Khám sức khỏe tổng quát ban đầu";
+        public const string FeverAndCough = "Cần uống thuốc hạ sốt và siro ho";
+        public const string ProbioticsAndZinc = "Bổ sung men vi sinh và kẽm";
+        public const string RespiratoryInfection = "Viêm đường hô hấp / Suy dinh dưỡng";
     }
 }

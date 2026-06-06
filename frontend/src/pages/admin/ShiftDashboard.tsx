@@ -1,12 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, List, Checkbox, Space, Typography, Tag, Spin, message, Row, Col, Input, Modal, Form, Select, DatePicker, InputNumber, Avatar } from 'antd';
-import { WarningOutlined, PlusOutlined, MedicineBoxOutlined, EditOutlined, HeartOutlined, SmileOutlined } from '@ant-design/icons';
+import { WarningOutlined, PlusOutlined, MedicineBoxOutlined, EditOutlined, HeartOutlined, SmileOutlined, CalendarOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import apiClient from '../../services/apiClient';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 const { Option } = Select;
+
+const SyringeIcon: React.FC<{ style?: React.CSSProperties; className?: string }> = ({ style, className }) => (
+  <span role="img" aria-label="syringe" className={`anticon ${className || ''}`} style={{ ...style, display: 'inline-flex', alignItems: 'center' }}>
+    <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle' }}>
+      <line x1="2" y1="22" x2="9" y2="15" />
+      <path d="M10 14L17.5 6.5M13.5 17.5L21 10" />
+      <line x1="8.5" y1="12.5" x2="11.5" y2="15.5" />
+      <line x1="16.5" y1="4.5" x2="19.5" y2="7.5" />
+      <line x1="18" y1="6" x2="22" y2="2" />
+      <line x1="20.5" y1="0.5" x2="23.5" y2="3.5" />
+      <line x1="12.5" y1="12.5" x2="14.5" y2="14.5" />
+      <line x1="15" y1="10" x2="17" y2="12" />
+    </svg>
+  </span>
+);
 
 const ShiftDashboard: React.FC = () => {
   const [children, setChildren] = useState<any[]>([]);
@@ -262,6 +277,13 @@ const ShiftDashboard: React.FC = () => {
     return medicalRecords.some(r => r.childId === childId);
   };
 
+  // Get active diagnosis for child list warning badge
+  const getActiveDiagnosis = (childId: string) => {
+    const records = medicalRecords.filter(r => r.childId === childId);
+    const active = records.find(r => r.diagnosis && r.diagnosis !== 'Khám sức khỏe tổng quát ban đầu');
+    return active ? active.diagnosis : null;
+  };
+
   // Filter children by search term
   const filteredChildren = children.filter(c => 
     c.fullName.toLowerCase().includes(searchTerm.toLowerCase())
@@ -334,7 +356,7 @@ const ShiftDashboard: React.FC = () => {
                   dataSource={filteredChildren}
                   renderItem={(child: any) => {
                     const isSelected = child.id === selectedChildId;
-                    const medicalAlert = hasMedicalAlert(child.id);
+                    const activeDiagnosis = getActiveDiagnosis(child.id);
                     return (
                       <List.Item
                         onClick={() => setSelectedChildId(child.id)}
@@ -358,9 +380,9 @@ const ShiftDashboard: React.FC = () => {
                           <span style={{ fontWeight: isSelected ? 700 : 500, color: isSelected ? '#7c3aed' : '#374151' }}>
                             {child.fullName}
                           </span>
-                          {medicalAlert && (
-                            <Tag color="error" style={{ borderRadius: 10, margin: 0, padding: '0 6px' }}>
-                              <MedicineBoxOutlined /> Cần thuốc
+                          {activeDiagnosis && (
+                            <Tag color="error" style={{ borderRadius: 10, margin: 0, padding: '0 6px', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={activeDiagnosis}>
+                              <MedicineBoxOutlined style={{ marginRight: 4 }} /> {activeDiagnosis}
                             </Tag>
                           )}
                         </Space>
@@ -385,7 +407,7 @@ const ShiftDashboard: React.FC = () => {
               }
               style={{ borderRadius: 12, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
             >
-              {childTasks.length === 0 ? (
+              {combinedTasks.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '60px 0' }}>
                   <SmileOutlined style={{ fontSize: '40px', color: '#bfbfbf', marginBottom: 16 }} />
                   <br />
@@ -409,8 +431,8 @@ const ShiftDashboard: React.FC = () => {
                                 padding: '12px 16px',
                                 borderRadius: 8,
                                 marginBottom: 8,
-                                background: isMedical ? '#fff5f5' : '#f9fafb',
-                                border: isMedical ? '1px solid #fecaca' : '1px solid #f3f4f6',
+                                background: task.isVaccination ? '#f5f3ff' : (isMedical ? '#fff5f5' : '#f9fafb'),
+                                border: task.isVaccination ? '1px solid #d8b4fe' : (isMedical ? '1px solid #fecaca' : '1px solid #f3f4f6'),
                                 display: 'flex',
                                 justifyContent: 'space-between',
                                 alignItems: 'center'
@@ -422,15 +444,22 @@ const ShiftDashboard: React.FC = () => {
                                   onChange={e => handleToggleComplete(task.id, e.target.checked)}
                                   style={{
                                     transform: 'scale(1.1)',
-                                    color: isMedical ? '#ef4444' : '#3b82f6'
+                                    color: task.isVaccination ? '#8b5cf6' : (isMedical ? '#ef4444' : '#3b82f6')
                                   }}
                                 />
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                                   <Space>
-                                    <Text delete={task.isCompleted} strong={isMedical} style={{ color: task.isCompleted ? '#9ca3af' : '#1f2937' }}>
+                                    {task.isVaccination && (
+                                      <SyringeIcon style={{ color: '#8b5cf6', fontSize: '16px', marginRight: 4 }} />
+                                    )}
+                                    <Text delete={task.isCompleted} strong={isMedical || task.isVaccination} style={{ color: task.isCompleted ? '#9ca3af' : '#1f2937' }}>
                                       {task.taskName}
                                     </Text>
-                                    {isMedical ? (
+                                    {task.isVaccination ? (
+                                      <Tag color="purple" style={{ fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        <SyringeIcon style={{ fontSize: '11px' }} /> Lịch Tiêm Chủng
+                                      </Tag>
+                                    ) : isMedical ? (
                                       <Tag color="red" style={{ fontSize: '10px' }}>Y Tế (Medical)</Tag>
                                     ) : (
                                       <Tag color="blue" style={{ fontSize: '10px' }}>Cơ Bản (Basic)</Tag>

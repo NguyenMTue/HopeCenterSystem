@@ -37,8 +37,11 @@ const MainLayout: React.FC = () => {
         
         // Chuyển hướng nếu vào trang gốc dashboard
         if (location.pathname === '/dashboard' || location.pathname === '/dashboard/') {
+          const userRoles = response.data.roles || [];
           if (response.data.userType === 'Adopter') {
             navigate('/adopter-portal', { replace: true });
+          } else if (userRoles.includes('CareGiver')) {
+            navigate('/dashboard/checklist-sinh-hoat', { replace: true });
           } else {
             navigate('/dashboard/children', { replace: true });
           }
@@ -162,7 +165,6 @@ const MainLayout: React.FC = () => {
             { key: '/dashboard/incidents', icon: <WarningOutlined />, label: 'Báo cáo Sự cố' },
             { key: '/dashboard/supplies-request', icon: <AppstoreAddOutlined />, label: 'Yêu cầu Vật tư' },
             { key: '/dashboard/medical-records', icon: <FileTextOutlined />, label: 'Hồ sơ Y tế' },
-            { key: '/dashboard/vaccinations', icon: <CalendarOutlined />, label: 'Lịch Tiêm chủng' },
           ],
         }
       ];

@@ -14,7 +14,6 @@ import RoleManagement from '../pages/admin/RoleManagement';
 import BackupManagement from '../pages/admin/BackupManagement';
 import ProfilePage from '../pages/admin/ProfilePage';
 import MedicalRecordManagement from '../pages/admin/MedicalRecordManagement';
-import VaccinationManagement from '../pages/admin/VaccinationManagement';
 import MedicineCabinetManagement from '../pages/admin/MedicineCabinetManagement';
 import AttendanceManagement from '../pages/admin/AttendanceManagement';
 import SuppliesRequestManagement from '../pages/admin/SuppliesRequestManagement';
@@ -79,7 +78,6 @@ export const router = createBrowserRouter([
       { path: 'backup', element: <BackupManagement /> },
       { path: 'profile', element: <ProfilePage /> },
       { path: 'medical-records', element: <MedicalRecordManagement /> },
-      { path: 'vaccinations', element: <VaccinationManagement /> },
       { path: 'medicine-cabinet', element: <MedicineCabinetManagement /> },
       { path: 'attendance', element: <AttendanceManagement /> },
       { path: 'checklist-sinh-hoat', element: <ShiftDashboard /> },
