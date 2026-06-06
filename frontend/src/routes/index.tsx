@@ -13,6 +13,12 @@ import EmployeeManagement from '../pages/admin/EmployeeManagement';
 import RoleManagement from '../pages/admin/RoleManagement';
 import BackupManagement from '../pages/admin/BackupManagement';
 import ProfilePage from '../pages/admin/ProfilePage';
+import MedicalRecordManagement from '../pages/admin/MedicalRecordManagement';
+import VaccinationManagement from '../pages/admin/VaccinationManagement';
+import MedicineCabinetManagement from '../pages/admin/MedicineCabinetManagement';
+import AttendanceManagement from '../pages/admin/AttendanceManagement';
+import SuppliesRequestManagement from '../pages/admin/SuppliesRequestManagement';
+import ShiftDashboard from '../pages/admin/ShiftDashboard';
 
 // Adopter Pages
 import AdoptionPortal from '../pages/Adoption/AdoptionPortal';
@@ -72,6 +78,12 @@ export const router = createBrowserRouter([
       { path: 'roles', element: <RoleManagement /> },
       { path: 'backup', element: <BackupManagement /> },
       { path: 'profile', element: <ProfilePage /> },
+      { path: 'medical-records', element: <MedicalRecordManagement /> },
+      { path: 'vaccinations', element: <VaccinationManagement /> },
+      { path: 'medicine-cabinet', element: <MedicineCabinetManagement /> },
+      { path: 'attendance', element: <AttendanceManagement /> },
+      { path: 'checklist-sinh-hoat', element: <ShiftDashboard /> },
+      { path: 'supplies-request', element: <SuppliesRequestManagement /> },
     ],
   },
 

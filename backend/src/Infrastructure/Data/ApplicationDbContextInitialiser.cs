@@ -1,4 +1,4 @@
-﻿
+
 using backend.Domain.Entities;
 using backend.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
@@ -163,7 +163,7 @@ public class ApplicationDbContextInitialiser
             
             if (!await _userManager.Users.AnyAsync(u => u.UserName == managerAccount.UserName))
             {
-                await _userManager.CreateAsync(managerAccount, "Manager@123!");
+                await _userManager.CreateAsync(managerAccount, "Manager@123");
                 await _userManager.AddToRoleAsync(managerAccount, "Manager");
 
                 _context.Employees.Add(new Employee
@@ -511,11 +511,24 @@ public class ApplicationDbContextInitialiser
             // Lấy danh sách nhân viên trực tiếp chăm sóc (Bảo mẫu, Y tá)
             var caregivers = await _context.Employees.Where(e => e.Position!.Contains("Bảo mẫu") || e.Position!.Contains("Y tá")).ToListAsync();
             
+            // Lấy bảo mẫu tue4 đặc thù
+            var caregiverTue4 = await _context.Employees.FirstOrDefaultAsync(e => e.FullName == "Nhân Viên Tuệ 4");
+            
             // Lấy 5 trẻ em để tạo kế hoạch (Ưu tiên đưa các bé đang nằm viện lên đầu)
             var targetChildren = await _context.Children
+                .Include(c => c.Room)
                 .OrderByDescending(c => c.Status == ChildStatus.Hospitalized)
                 .Take(5)
                 .ToListAsync();
+
+            // Đảm bảo có ít nhất 1 trẻ thuộc Khu Mầm Non để Bảo mẫu tue4 có dữ liệu kế hoạch kiểm thử
+            var mamNonChild = await _context.Children
+                .Include(c => c.Room)
+                .FirstOrDefaultAsync(c => c.Room != null && c.Room.Location == "Khu Mầm Non");
+            if (mamNonChild != null && !targetChildren.Any(c => c.Id == mamNonChild.Id))
+            {
+                targetChildren.Add(mamNonChild);
+            }
 
             if (approver != null && caregivers.Any())
             {
@@ -526,6 +539,17 @@ public class ApplicationDbContextInitialiser
                 {
                     bool isHospitalized = child.Status == ChildStatus.Hospitalized;
                     
+                    // Gán người chịu trách nhiệm trực tiếp
+                    Guid? assignedEmployeeId = null;
+                    if (child.Room != null && child.Room.Location == "Khu Mầm Non" && caregiverTue4 != null)
+                    {
+                        assignedEmployeeId = caregiverTue4.Id;
+                    }
+                    else
+                    {
+                        assignedEmployeeId = caregivers[random.Next(caregivers.Count)].Id;
+                    }
+
                     var plan = new CarePlan
                     {
                         Id = Guid.NewGuid(), // Khởi tạo ID trước để dùng làm khóa ngoại cho CareLog ở bước dưới
@@ -534,6 +558,7 @@ public class ApplicationDbContextInitialiser
                         StartDate = DateTime.UtcNow.AddDays(-random.Next(5, 15)), // Bắt đầu từ 5-15 ngày trước
                         EndDate = DateTime.UtcNow.AddDays(random.Next(15, 30)),   // Dự kiến kết thúc trong 15-30 ngày tới
                         ApproverId = approver.Id,
+                        EmployeeId = assignedEmployeeId,
                         Status = ApplicationStatus.Approved // Set trạng thái đã duyệt để có thể ghi Log
                     };
                     
@@ -1117,6 +1142,178 @@ public class ApplicationDbContextInitialiser
 
             _context.Notifications.AddRange(notifications);
             await _context.SaveChangesAsync();
+        }
+
+        // ==========================================
+        // 19. TẠO DỰ LIỆU NHIỆM VỤ SINH HOẠT HÀNG NGÀY (DAILY CARE TASKS)
+        // ==========================================
+        if (!_context.DailyCareTasks.Any())
+        {
+            var caregiverTue4 = await _context.Employees.FirstOrDefaultAsync(e => e.FullName == "Nhân Viên Tuệ 4");
+            
+            // Lấy tất cả trẻ em thuộc Khu Mầm Non để gán việc cho Tuệ 4
+            var mamNonChildren = await _context.Children
+                .Include(c => c.Room)
+                .Where(c => c.Room != null && c.Room.Location == "Khu Mầm Non")
+                .ToListAsync();
+
+            if (caregiverTue4 != null && mamNonChildren.Any())
+            {
+                var dailyTasks = new List<DailyCareTask>();
+                var today = DateTime.UtcNow.Date;
+
+                // Các task mẫu
+                var morningTasks = new List<(string Name, string Type)>
+                {
+                    ("Cho trẻ ăn sáng (Cháo yến mạch dinh dưỡng)", "BasicCare"),
+                    ("Lau mặt và vệ sinh răng miệng cho trẻ", "BasicCare"),
+                    ("Uống thuốc bổ sung Vitamin D hàng ngày", "MedicalCare")
+                };
+
+                var noonTasks = new List<(string Name, string Type)>
+                {
+                    ("Bữa ăn trưa (Súp rau củ thịt băm + Cơm nhão)", "BasicCare"),
+                    ("Cho uống sữa bột công thức", "BasicCare"),
+                    ("Đo thân nhiệt và ghi nhận sức khỏe", "MedicalCare"),
+                    ("Uống thuốc ho (siro ho thảo dược) sau ăn", "MedicalCare")
+                };
+
+                var afternoonTasks = new List<(string Name, string Type)>
+                {
+                    ("Vận động nhẹ nhàng và tắm nắng chiều", "BasicCare"),
+                    ("Vệ sinh cơ thể, tắm rửa thay đồ sạch", "BasicCare"),
+                    ("Uống sữa chua / Ăn xế bổ sung lợi khuẩn", "BasicCare")
+                };
+
+                var nightTasks = new List<(string Name, string Type)>
+                {
+                    ("Bữa ăn tối (Cháo gà hạt sen)", "BasicCare"),
+                    ("Uống thuốc an thần/thuốc bổ trước khi ngủ", "MedicalCare"),
+                    ("Đọc truyện/Nghe nhạc nhẹ và dỗ trẻ ngủ ngon", "BasicCare")
+                };
+
+                foreach (var child in mamNonChildren)
+                {
+                    // Thêm các task Buổi Sáng
+                    foreach (var t in morningTasks)
+                    {
+                        dailyTasks.Add(new DailyCareTask
+                        {
+                            ChildId = child.Id,
+                            EmployeeId = caregiverTue4.Id,
+                            TaskName = t.Name,
+                            Session = "Sáng",
+                            CareType = t.Type,
+                            IsCompleted = false,
+                            TaskDate = today
+                        });
+                    }
+
+                    // Thêm các task Buổi Trưa
+                    foreach (var t in noonTasks)
+                    {
+                        dailyTasks.Add(new DailyCareTask
+                        {
+                            ChildId = child.Id,
+                            EmployeeId = caregiverTue4.Id,
+                            TaskName = t.Name,
+                            Session = "Trưa",
+                            CareType = t.Type,
+                            IsCompleted = false,
+                            TaskDate = today
+                        });
+                    }
+
+                    // Thêm các task Buổi Chiều
+                    foreach (var t in afternoonTasks)
+                    {
+                        dailyTasks.Add(new DailyCareTask
+                        {
+                            ChildId = child.Id,
+                            EmployeeId = caregiverTue4.Id,
+                            TaskName = t.Name,
+                            Session = "Chiều",
+                            CareType = t.Type,
+                            IsCompleted = false,
+                            TaskDate = today
+                        });
+                    }
+
+                    // Thêm các task Buổi Tối
+                    foreach (var t in nightTasks)
+                    {
+                        dailyTasks.Add(new DailyCareTask
+                        {
+                            ChildId = child.Id,
+                            EmployeeId = caregiverTue4.Id,
+                            TaskName = t.Name,
+                            Session = "Tối",
+                            CareType = t.Type,
+                            IsCompleted = false,
+                            TaskDate = today
+                        });
+                    }
+                }
+
+                _context.DailyCareTasks.AddRange(dailyTasks);
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        // ==========================================
+        // 20. TẠO LỊCH TIÊM CHỦNG (VACCINATIONS)
+        // ==========================================
+        if (!_context.Vaccinations.Any())
+        {
+            var mamNonChildren = await _context.Children
+                .Include(c => c.Room)
+                .Where(c => c.Room != null && c.Room.Location == "Khu Mầm Non")
+                .ToListAsync();
+
+            if (mamNonChildren.Any())
+            {
+                var vaccinations = new List<Vaccination>();
+                var today = DateTime.UtcNow.Date;
+
+                // Chọn bé đầu tiên trong mầm non để gán lịch tiêm chủng hôm nay (khớp ca trực)
+                vaccinations.Add(new Vaccination
+                {
+                    ChildId = mamNonChildren[0].Id,
+                    VaccineName = "Lao (BCG) - Tiêm phòng dịch lao",
+                    Dose = "Mũi 1",
+                    VaccinationDate = today.AddHours(9), // 9h sáng hôm nay
+                    Status = "Chờ tiêm"
+                });
+
+                // Chọn bé thứ hai
+                if (mamNonChildren.Count > 1)
+                {
+                    vaccinations.Add(new Vaccination
+                    {
+                        ChildId = mamNonChildren[1].Id,
+                        VaccineName = "Bại liệt (IPV) - Sởi",
+                        Dose = "Mũi 2",
+                        VaccinationDate = today.AddDays(2).AddHours(10), // 2 ngày nữa
+                        Status = "Chờ tiêm"
+                    });
+                }
+
+                // Tiền bối khác
+                if (mamNonChildren.Count > 2)
+                {
+                    vaccinations.Add(new Vaccination
+                    {
+                        ChildId = mamNonChildren[2].Id,
+                        VaccineName = "Sởi - Quai bị - Rubella",
+                        Dose = "Mũi 1",
+                        VaccinationDate = today.AddDays(-3), // Đã tiêm
+                        Status = "Đã tiêm"
+                    });
+                }
+
+                _context.Vaccinations.AddRange(vaccinations);
+                await _context.SaveChangesAsync();
+            }
         }
     }
 

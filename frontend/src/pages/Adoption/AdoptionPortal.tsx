@@ -556,7 +556,6 @@ const AdoptionPortal: React.FC = () => {
                                     className="object-cover w-full h-full"
                                     style={{ height: '100%', width: '100%', objectFit: 'cover' }}
                                     wrapperStyle={{ width: '100%', height: '100%', display: 'block' }}
-                                    wrapperClassName="w-full h-full"
                                     preview={isApproved ? {
                                       mask: (
                                         <div className="flex flex-col items-center justify-center text-xs text-white">

@@ -15,7 +15,9 @@ import {
   UserOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
-  MenuUnfoldOutlined
+  MenuUnfoldOutlined,
+  CalendarOutlined,
+  DashboardOutlined
 } from '@ant-design/icons';
 
 const { Header, Sider, Content } = Layout;
@@ -155,10 +157,12 @@ const MainLayout: React.FC = () => {
           type: 'group' as const,
           label: 'CA TRỰC BẢO MẪU',
           children: [
-            { key: '/dashboard/children', icon: <HeartOutlined />, label: 'Ca trực & Điểm danh' },
-            { key: '/dashboard/care-plans', icon: <MedicineBoxOutlined />, label: 'Checklist Sinh hoạt' },
+            { key: '/dashboard/checklist-sinh-hoat', icon: <DashboardOutlined />, label: 'Bảng ca trực (Checklist)' },
+            { key: '/dashboard/attendance', icon: <HeartOutlined />, label: 'Ca trực & Điểm danh' },
             { key: '/dashboard/incidents', icon: <WarningOutlined />, label: 'Báo cáo Sự cố' },
-            { key: '/dashboard/supplies', icon: <AppstoreAddOutlined />, label: 'Yêu cầu Vật tư' },
+            { key: '/dashboard/supplies-request', icon: <AppstoreAddOutlined />, label: 'Yêu cầu Vật tư' },
+            { key: '/dashboard/medical-records', icon: <FileTextOutlined />, label: 'Hồ sơ Y tế' },
+            { key: '/dashboard/vaccinations', icon: <CalendarOutlined />, label: 'Lịch Tiêm chủng' },
           ],
         }
       ];

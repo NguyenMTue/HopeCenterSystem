@@ -1,7 +1,9 @@
 using backend.Application.Common.Interfaces;
+using backend.Application.Common.Security;
 
 namespace backend.Application.MedicalRecords.Commands.DeleteMedicalRecord;
 
+[Authorize(Roles = "CareGiver,Director,Manager")]
 public record DeleteMedicalRecordCommand(Guid Id) : IRequest;
 
 public class DeleteMedicalRecordCommandHandler(IApplicationDbContext context) : IRequestHandler<DeleteMedicalRecordCommand>

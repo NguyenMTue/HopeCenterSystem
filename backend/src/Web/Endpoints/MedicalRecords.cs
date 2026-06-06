@@ -11,7 +11,7 @@ public class MedicalRecords : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
-        groupBuilder.RequireAuthorization();
+        groupBuilder.RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = "CareGiver,Director,Manager" });
         groupBuilder.MapGet(GetMedicalRecords, "");
         groupBuilder.MapPost(CreateMedicalRecord, "");
         groupBuilder.MapPut(UpdateMedicalRecord, "{id}");

@@ -24,6 +24,8 @@ public interface IApplicationDbContext
     DbSet<DonationAllocation> DonationAllocations { get; }
     DbSet<PostAdoptionFollowUp> PostAdoptionFollowUps { get; }
     DbSet<ChildStatusHistory> ChildStatusHistories { get; }
+    DbSet<DailyCareTask> DailyCareTasks { get; }
+    DbSet<Vaccination> Vaccinations { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using backend.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -31,6 +31,8 @@ public class ApplicationDbContext : IdentityDbContext<Account, Role, Guid>, IApp
     public DbSet<DonationAllocation> DonationAllocations => Set<DonationAllocation>();
     public DbSet<PostAdoptionFollowUp> PostAdoptionFollowUps => Set<PostAdoptionFollowUp>();
     public DbSet<ChildStatusHistory> ChildStatusHistories => Set<ChildStatusHistory>();
+    public DbSet<DailyCareTask> DailyCareTasks => Set<DailyCareTask>();
+    public DbSet<Vaccination> Vaccinations => Set<Vaccination>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

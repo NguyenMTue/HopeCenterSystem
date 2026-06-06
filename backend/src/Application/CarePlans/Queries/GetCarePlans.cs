@@ -34,6 +34,8 @@ public class CarePlanDto
     public DateTime StartDate { get; init; }
     public DateTime EndDate { get; init; }
     public Guid? ApproverId { get; init; }
+    public Guid? EmployeeId { get; init; }
+    public string? EmployeeName { get; init; }
     public ApplicationStatus Status { get; init; }
 
     private class Mapping : Profile
@@ -41,7 +43,8 @@ public class CarePlanDto
         public Mapping()
         {
             CreateMap<backend.Domain.Entities.CarePlan, CarePlanDto>()
-                .ForMember(d => d.ChildName, opt => opt.MapFrom(s => s.Child.FullName));
+                .ForMember(d => d.ChildName, opt => opt.MapFrom(s => s.Child.FullName))
+                .ForMember(d => d.EmployeeName, opt => opt.MapFrom(s => s.Employee != null ? s.Employee.FullName : null));
         }
     }
 }

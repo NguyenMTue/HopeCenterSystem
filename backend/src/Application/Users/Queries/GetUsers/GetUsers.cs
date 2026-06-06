@@ -35,6 +35,7 @@ public class GetUsersQueryHandler(
                 Phone = user.Employee?.Phone,
                 Address = user.Adopter?.Address,
                 UserType = user.Employee != null ? "Employee" : (user.Adopter != null ? "Adopter" : "AccountOnly"),
+                EmployeeId = user.Employee?.Id,
                 AdopterId = user.Adopter?.Id,
                 IDCard = user.Adopter?.IDCard,
                 FinancialStatus = user.Adopter?.FinancialStatus,
@@ -58,6 +59,7 @@ public class UserDto
     public string? Phone { get; init; }
     public string? Address { get; init; }
     public string UserType { get; init; } = null!;
+    public Guid? EmployeeId { get; init; }
     public Guid? AdopterId { get; init; }
     public string? IDCard { get; init; }
     public string? FinancialStatus { get; init; }
