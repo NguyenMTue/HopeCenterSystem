@@ -148,35 +148,35 @@ const HomePage: React.FC = () => {
                   <p>Cập nhật những thông tin, sự kiện và hành trình phát triển mới nhất tại Trung tâm.</p>
               </div>
               <div className="news-grid">
-                  <div className="news-card">
-                      <div className="news-img"><img src="https://images.unsplash.com/photo-1577896851231-70ef18881754?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" alt="News 1" /></div>
+                  <div className="news-card" onClick={() => window.open("https://congly.vn/bao-cong-ly-to-chuc-tet-trung-thu-cho-cac-chau-thieu-nien-nhi-dong-396928.html", "_blank")} style={{ cursor: 'pointer' }}>
+                      <div className="news-img"><img src="https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" alt="News 1" /></div>
                       <div className="news-content">
                           <span className="news-date">10 Tháng 4, 2026</span>
                           <h3 className="news-title">Tổ chức Lễ hội Trăng Rằm - Trung thu ấm áp cho các em nhỏ</h3>
                           <p className="news-excerpt">Vừa qua, Hope Center đã phối hợp cùng Đoàn Thanh niên tổ chức đêm hội rước đèn, múa lân và trao hơn 200 suất quà Trung thu cho các em, mang lại tiếng cười rộn rã khắp trung tâm...</p>
-                          <a href="#" style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <a href="https://congly.vn/bao-cong-ly-to-chuc-tet-trung-thu-cho-cac-chau-thieu-nien-nhi-dong-396928.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px' }} onClick={(e) => e.stopPropagation()}>
                               Đọc tiếp <i className="fa-solid fa-arrow-right" style={{ fontSize: '12px' }}></i>
                           </a>
                       </div>
                   </div>
-                  <div className="news-card">
-                      <div className="news-img"><img src="https://images.unsplash.com/photo-1584820927498-cafe2c1c7669?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" alt="News 2" /></div>
+                  <div className="news-card" onClick={() => window.open("https://tuoitre.vn/phau-thuat-tim-bam-sinh-cho-be-so-sinh-chi-15-gio-tuoi-20200623182526465.htm", "_blank")} style={{ cursor: 'pointer' }}>
+                      <div className="news-img"><img src="https://images.unsplash.com/photo-1516627145497-ae6968895b74?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" alt="News 2" /></div>
                       <div className="news-content">
                           <span className="news-date">05 Tháng 4, 2026</span>
                           <h3 className="news-title">Phẫu thuật tim thành công cho bé Tuấn (Mã HS: CH-105)</h3>
                           <p className="news-excerpt">Nhờ sự đóng góp quý báu từ "Quỹ Trái Tim Nhân Ái", ca phẫu thuật tim bẩm sinh của bé Tuấn đã diễn ra thành công tốt đẹp. Hiện sức khỏe của bé đang tiến triển rất tích cực...</p>
-                          <a href="#" style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <a href="https://tuoitre.vn/phau-thuat-tim-bam-sinh-cho-be-so-sinh-chi-15-gio-tuoi-20200623182526465.htm" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px' }} onClick={(e) => e.stopPropagation()}>
                               Đọc tiếp <i className="fa-solid fa-arrow-right" style={{ fontSize: '12px' }}></i>
                           </a>
                       </div>
                   </div>
-                  <div className="news-card">
-                      <div className="news-img"><img src="https://images.unsplash.com/photo-1529390079861-591de354faf5?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" alt="News 3" /></div>
+                  <div className="news-card" onClick={() => window.open("https://bvdktuthainguyen.gov.vn/article/tiep-nhan-va-trao-qua-cho-nguoi-benh-co-hoan-canh-kho-khan", "_blank")} style={{ cursor: 'pointer' }}>
+                      <div className="news-img"><img src="https://images.unsplash.com/photo-1531983412531-1f49a365ffed?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" alt="News 3" /></div>
                       <div className="news-content">
                           <span className="news-date">28 Tháng 3, 2026</span>
                           <h3 className="news-title">Tiếp nhận lô hàng tài trợ vật tư y tế và sữa bột từ công ty ABC</h3>
                           <p className="news-excerpt">Trung tâm xin trân trọng cảm ơn quý công ty TNHH ABC đã trao tặng lô vật tư gồm 500 hộp sữa bột và các trang thiết bị y tế cơ bản, góp phần hỗ trợ công tác chăm sóc sức khỏe cho các em sơ sinh...</p>
-                          <a href="#" style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <a href="https://bvdktuthainguyen.gov.vn/article/tiep-nhan-va-trao-qua-cho-nguoi-benh-co-hoan-canh-kho-khan" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px' }} onClick={(e) => e.stopPropagation()}>
                               Đọc tiếp <i className="fa-solid fa-arrow-right" style={{ fontSize: '12px' }}></i>
                           </a>
                       </div>

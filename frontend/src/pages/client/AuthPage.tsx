@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Input, Button, Typography, message, Space } from 'antd';
+import { Card, Form, Input, Button, Typography, message, Space, Select } from 'antd';
 import { 
   UserOutlined, 
   LockOutlined, 
@@ -37,9 +37,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => {
     console.log('--- LOGIN ATTEMPT ---');
     console.log('Data being sent:', { email: values.username, password: values.password });
     try {
-      // Sửa: Đường dẫn Login trong Identity API mặc định được map vào /api/Users/login 
-      // do cơ chế MapEndpoints của Backend
-      const response = await apiClient.post('/api/Users/login', {
+      // Sửa: Sử dụng endpoint custom để hỗ trợ đăng nhập cả bằng username và email
+      const response = await apiClient.post('/api/Users/login-custom', {
         email: values.username,
         password: values.password
       });
@@ -64,6 +63,13 @@ const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => {
       console.error('Error status:', error.response?.status);
       console.error('Error response data:', error.response?.data);
       
+      if (error.response?.data?.status === 'IncompleteProfile') {
+        const accountId = error.response.data.accountId;
+        message.warning('Tài khoản chưa hoàn thành hồ sơ cá nhân. Vui lòng điền thông tin để đăng nhập.');
+        navigate(`/complete-profile?accountId=${accountId}`);
+        return;
+      }
+      
       const errorMsg = error.response?.data?.detail || error.response?.data?.title || 'Sai tài khoản hoặc mật khẩu. Vui lòng thử lại!';
       message.error(errorMsg);
     } finally {
@@ -75,28 +81,28 @@ const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => {
     setLoading(true);
     console.log('--- REGISTER ATTEMPT ---');
     console.log('Data being sent:', {
-      fullName: values.fullName,
       email: values.email,
-      phoneNumber: values.phone,
-      password: values.password
+      password: values.password,
+      roles: [values.role]
     });
     try {
       const response = await apiClient.post('/api/Users/register-custom', {
-        fullName: values.fullName,
         email: values.email,
-        phoneNumber: values.phone,
-        password: values.password
+        password: values.password,
+        userName: values.email,
+        roles: [values.role]
       });
 
       console.log('Register Success Response:', response.data);
-      message.success('Đăng ký tài khoản thành công! Hãy đăng nhập để tiếp tục.');
-      setMode('login');
-      navigate('/login');
+      message.success('Đăng ký tài khoản thành công! Vui lòng hoàn tất thông tin cá nhân của bạn.');
+      const accountId = response.data;
+      navigate(`/complete-profile?accountId=${accountId}&role=${values.role}`);
     } catch (error: any) {
       console.error('--- REGISTER ERROR ---');
       console.error('Error status:', error.response?.status);
       console.error('Error response data:', error.response?.data);
-      message.error('Đăng ký không thành công. Vui lòng kiểm tra lại thông tin!');
+      const errorMsg = error.response?.data || 'Đăng ký không thành công. Vui lòng kiểm tra lại thông tin!';
+      message.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -123,7 +129,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => {
       </div>
 
       <Card 
-        variant="none" 
+        variant="borderless" 
         style={{ 
           width: '100%', 
           maxWidth: '500px', 
@@ -176,18 +182,10 @@ const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => {
           </Form>
         ) : (
           /* ================= FORM ĐĂNG KÝ ================= */
-          <Form layout="vertical" onFinish={handleRegister} size="large">
-            <Form.Item 
-              name="fullName" 
-              label={<Text strong>Họ và Tên</Text>} 
-              rules={[{ required: true, message: 'Vui lòng nhập họ tên!' }]}
-            >
-              <Input prefix={<UserOutlined style={{ color: '#94a3b8' }} />} placeholder="Nhập họ tên đầy đủ" style={{ borderRadius: '8px' }} />
-            </Form.Item>
-
+          <Form layout="vertical" onFinish={handleRegister} size="large" initialValues={{ role: 'Adopter' }}>
             <Form.Item 
               name="email" 
-              label={<Text strong>Email</Text>} 
+              label={<Text strong>Email *</Text>} 
               rules={[
                 { required: true, message: 'Vui lòng nhập email!' },
                 { type: 'email', message: 'Email không hợp lệ!' }
@@ -197,24 +195,27 @@ const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => {
             </Form.Item>
 
             <Form.Item 
-              name="phone" 
-              label={<Text strong>Số điện thoại</Text>} 
-              rules={[{ required: true, message: 'Vui lòng nhập số điện thoại!' }]}
-            >
-              <Input prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder="09xxxxxxxxx" style={{ borderRadius: '8px' }} />
-            </Form.Item>
-
-            <Form.Item 
               name="password" 
-              label={<Text strong>Mật khẩu</Text>} 
+              label={<Text strong>Mật khẩu *</Text>} 
               rules={[{ required: true, message: 'Vui lòng tạo mật khẩu!' }]}
             >
               <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder="Tạo mật khẩu an toàn" style={{ borderRadius: '8px' }} />
             </Form.Item>
 
+            <Form.Item 
+              name="role" 
+              label={<Text strong>Vai trò đăng ký *</Text>}
+              rules={[{ required: true, message: 'Vui lòng chọn vai trò!' }]}
+            >
+              <Select style={{ borderRadius: '8px' }}>
+                <Select.Option value="Adopter">Người Nhận Nuôi (Adopter)</Select.Option>
+                <Select.Option value="Donor">Nhà Tài Trợ (Donor)</Select.Option>
+              </Select>
+            </Form.Item>
+
             <Form.Item>
               <Button type="primary" htmlType="submit" loading={loading} block style={{ background: '#f43f5e', height: '45px', borderRadius: '8px', fontWeight: 700, fontSize: '16px', marginTop: '10px' }}>
-                Tạo Tài Khoản
+                Đăng Ký
               </Button>
             </Form.Item>
 

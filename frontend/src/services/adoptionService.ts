@@ -8,8 +8,11 @@ export const getAdoptionList = async () => {
     return response.data;
 };
 
-// Cập nhật trạng thái (Duyệt/Từ chối)
-export const updateAdoptionStatus = async (id: string, status: number) => {
-    const response = await apiClient.put(`/api/AdoptionApplications/${id}/status`, { status });
+// Cập nhật đơn nhận nuôi
+export const updateAdoption = async (id: string, payload: any) => {
+    const response = await apiClient.put(`/api/AdoptionApplications/${id}`, {
+        id,
+        ...payload
+    });
     return response.data;
 };

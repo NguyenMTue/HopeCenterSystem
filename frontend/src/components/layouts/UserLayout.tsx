@@ -15,22 +15,23 @@ const UserLayout: React.FC = () => {
 
   const token = localStorage.getItem('token');
 
+  const fetchUserInfo = async () => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const response = await apiClient.get('/api/Users/me');
+      setUserInfo(response.data);
+    } catch (error) {
+      console.error('Failed to fetch user info', error);
+      localStorage.removeItem('token');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchUserInfo = async () => {
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const response = await apiClient.get('/api/Users/me');
-        setUserInfo(response.data);
-      } catch (error) {
-        console.error('Failed to fetch user info', error);
-        localStorage.removeItem('token');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchUserInfo();
   }, [token]);
 
@@ -42,18 +43,27 @@ const UserLayout: React.FC = () => {
   };
 
   const userMenuItems = [
-    { 
-      key: 'profile', 
-      icon: <UserOutlined />, 
-      label: 'Hồ sơ cá nhân', 
-      onClick: () => navigate('/dashboard/profile') 
-    },
+    ...(userInfo?.userType !== 'Adopter' ? [
+      { 
+        key: 'profile', 
+        icon: <UserOutlined />, 
+        label: 'Hồ sơ cá nhân', 
+        onClick: () => navigate('/dashboard/profile') 
+      }
+    ] : []),
     ...(userInfo?.userType === 'Adopter' ? [
       { 
         key: 'portal', 
         icon: <AppstoreOutlined />, 
         label: 'Cổng thông tin', 
-        onClick: () => navigate('/dashboard/adopter-portal') 
+        onClick: () => navigate('/adopter-portal') 
+      }
+    ] : (userInfo?.userType === 'Donor' ? [
+      { 
+        key: 'portal', 
+        icon: <AppstoreOutlined />, 
+        label: 'Cổng tài trợ', 
+        onClick: () => navigate('/dashboard/donor-portal') 
       }
     ] : [
       { 
@@ -62,7 +72,7 @@ const UserLayout: React.FC = () => {
         label: 'Quản trị hệ thống', 
         onClick: () => navigate('/dashboard') 
       }
-    ]),
+    ])),
     { type: 'divider' as const },
     { 
       key: 'logout', 
@@ -156,7 +166,9 @@ const UserLayout: React.FC = () => {
                   <Avatar style={{ backgroundColor: '#f43f5e' }} icon={<UserOutlined />} />
                   <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
                     <Text strong style={{ fontSize: '14px' }}>{userInfo.fullName}</Text>
-                    <Text type="secondary" style={{ fontSize: '12px' }}>{userInfo.userType === 'Employee' ? 'Nhân viên' : 'Người nhận nuôi'}</Text>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      {userInfo.userType === 'Employee' ? 'Nhân viên' : (userInfo.userType === 'Donor' ? 'Nhà tài trợ' : 'Người nhận nuôi')}
+                    </Text>
                   </div>
                 </Space>
               </Dropdown>
@@ -177,7 +189,7 @@ const UserLayout: React.FC = () => {
       </Header>
 
       <Content style={{ width: '100%', minHeight: 'calc(100vh - 80px - 100px)' }}>
-        <Outlet />
+        <Outlet context={{ fetchUserInfo }} />
       </Content>
 
       <Footer style={{ 

@@ -1,5 +1,6 @@
 using backend.Domain.Common;
 using backend.Domain.Enums;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace backend.Domain.Entities;
 
@@ -16,6 +17,7 @@ public class InventoryTransaction : BaseAuditableEntity
     public string? Notes { get; set; } 
     public string? ReferenceDocument { get; set; } // Chứng từ liên quan (hóa đơn, phiếu xuất...)
 
+    [ForeignKey("ItemId")]
     public virtual InventoryItem? InventoryItem { get; set; }
     public virtual Employee? Employee { get; set; }
 }

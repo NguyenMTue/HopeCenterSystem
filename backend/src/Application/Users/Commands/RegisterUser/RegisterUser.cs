@@ -38,26 +38,31 @@ public class RegisterUserCommandHandler(
             throw new Exception(string.Join(", ", result.Errors.Select(e => e.Description)));
         }
 
-        // Xử lý Role
-        var rolesToAssign = new List<string>();
-        
-        // Mặc định là Adopter cho đăng ký từ bên ngoài
-        if (request.Roles != null && request.Roles.Any())
-        {
-            rolesToAssign = request.Roles;
-        }
-        else
-        {
-            rolesToAssign.Add(backend.Domain.Constants.Roles.Adopter);
-        }
+        // Xử lý Role - Cho phép đăng ký vai trò Adopter hoặc Donor từ bên ngoài
+        var isDonor = request.Roles.Any(r => r.Equals("Donor", StringComparison.OrdinalIgnoreCase));
+        var rolesToAssign = isDonor 
+            ? new List<string> { backend.Domain.Constants.Roles.Donor }
+            : new List<string> { backend.Domain.Constants.Roles.Adopter };
 
         foreach (var role in rolesToAssign)
         {
             await userManager.AddToRoleAsync(user, role);
         }
 
-        // Xử lý tạo thông tin chi tiết (Employee hoặc Adopter)
-        if (rolesToAssign.Any(r => r == backend.Domain.Constants.Roles.Adopter))
+        // Xử lý tạo thông tin chi tiết (Adopter hoặc Donor)
+        if (isDonor)
+        {
+            var donor = new Donor
+            {
+                AccountId = user.Id,
+                FullName = request.FullName ?? request.UserName,
+                Address = request.Address,
+                Phone = request.Phone,
+                Email = request.Email
+            };
+            context.Donors.Add(donor);
+        }
+        else
         {
             var adopter = new Adopter
             {
@@ -67,18 +72,6 @@ public class RegisterUserCommandHandler(
                 IDCard = "Chưa cập nhật" // Giá trị mặc định
             };
             context.Adopters.Add(adopter);
-        }
-        else
-        {
-            // Nếu có các quyền nhân viên thì tạo bản ghi Employee
-            var employee = new Employee
-            {
-                AccountId = user.Id,
-                FullName = request.FullName ?? request.UserName,
-                Position = request.Position ?? "Nhân viên mới",
-                Phone = request.Phone
-            };
-            context.Employees.Add(employee);
         }
 
         await context.SaveChangesAsync(cancellationToken);

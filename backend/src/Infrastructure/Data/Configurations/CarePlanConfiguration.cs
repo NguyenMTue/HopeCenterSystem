@@ -14,5 +14,15 @@ public class CarePlanConfiguration : IEntityTypeConfiguration<CarePlan>
         builder.Property(cp => cp.Title)
             .IsRequired()
             .HasMaxLength(200);
+
+        builder.HasOne(cp => cp.Approver)
+            .WithMany(e => e.ApprovedCarePlans)
+            .HasForeignKey(cp => cp.ApproverId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(cp => cp.Employee)
+            .WithMany(e => e.CarePlans)
+            .HasForeignKey(cp => cp.EmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

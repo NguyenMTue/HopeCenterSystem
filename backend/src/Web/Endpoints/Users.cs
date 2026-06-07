@@ -1,11 +1,13 @@
-﻿using backend.Application.Common.Interfaces;
+using backend.Application.Common.Interfaces;
 using backend.Infrastructure.Identity;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using backend.Domain.Entities;
 using backend.Application.Users.Queries.GetUsers;
 using backend.Application.Users.Commands.RegisterUser;
+using Microsoft.EntityFrameworkCore;
 
 namespace backend.Web.Endpoints;
 
@@ -39,12 +41,27 @@ public class Users : IEndpointGroup
         // Endpoint chẩn đoán
         groupBuilder.MapPost(TestLogin, "test-login")
             .WithName("TestLogin");
+
+        // Custom Login endpoint supporting both email and username
+        groupBuilder.MapPost(LoginCustom, "login-custom")
+            .WithName("LoginCustom");
+
+        // Custom endpoint to complete adopter profile anonymously
+        groupBuilder.MapPost(CompleteProfile, "complete-profile")
+            .WithName("CompleteProfile");
     }
 
-    public static async Task<Created<Guid>> RegisterUser(ISender sender, RegisterUserCommand command)
+    public static async Task<IResult> RegisterUser(ISender sender, RegisterUserCommand command)
     {
-        var id = await sender.Send(command);
-        return TypedResults.Created($"/api/Users/{id}", id);
+        try
+        {
+            var id = await sender.Send(command);
+            return TypedResults.Created($"/api/Users/{id}", id);
+        }
+        catch (Exception ex)
+        {
+            return TypedResults.BadRequest(ex.Message);
+        }
     }
 
     // Đổi ApplicationUser thành Account
@@ -97,9 +114,146 @@ public class Users : IEndpointGroup
         });
     }
 
+    public static async Task<IResult> LoginCustom(
+        [FromBody] LoginRequest request,
+        [FromQuery] bool? useCookies,
+        [FromQuery] bool? useSessionCookies,
+        UserManager<Account> userManager,
+        SignInManager<Account> signInManager,
+        IApplicationDbContext context)
+    {
+        var user = await userManager.FindByNameAsync(request.Email) 
+                   ?? await userManager.FindByEmailAsync(request.Email);
+                   
+        if (user == null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var checkPassword = await userManager.CheckPasswordAsync(user, request.Password);
+        if (!checkPassword)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        // Check if user is an Adopter, and if so, check if their profile is completed
+        var roles = await userManager.GetRolesAsync(user);
+        if (roles.Contains(backend.Domain.Constants.Roles.Adopter))
+        {
+            var adopter = await context.Adopters.FirstOrDefaultAsync(a => a.AccountId == user.Id);
+            if (adopter == null || adopter.IDCard == "Chưa cập nhật" || string.IsNullOrWhiteSpace(adopter.Address) || string.IsNullOrWhiteSpace(adopter.MaritalStatus))
+            {
+                return TypedResults.BadRequest(new { 
+                    status = "IncompleteProfile", 
+                    accountId = user.Id, 
+                    detail = "Vui lòng hoàn thành thông tin cá nhân trước khi đăng nhập." 
+                });
+            }
+        }
+
+        var useCookie = useCookies == true || useSessionCookies == true;
+        var isPersistent = useCookies == true && useSessionCookies != true;
+
+        var result = await signInManager.PasswordSignInAsync(user, request.Password, isPersistent, lockoutOnFailure: true);
+
+        if (!result.Succeeded)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (useCookie)
+        {
+            return TypedResults.Ok();
+        }
+
+        var principal = await signInManager.CreateUserPrincipalAsync(user);
+        return TypedResults.SignIn(principal, authenticationScheme: IdentityConstants.BearerScheme);
+    }
+
+    public static async Task<IResult> CompleteProfile(
+        [FromBody] CompleteProfileRequest request,
+        IApplicationDbContext context,
+        UserManager<Account> userManager)
+    {
+        var adopter = await context.Adopters
+            .Include(a => a.Account)
+            .FirstOrDefaultAsync(a => a.AccountId == request.AccountId);
+            
+        if (adopter == null)
+        {
+            var donor = await context.Donors
+                .Include(d => d.Account)
+                .FirstOrDefaultAsync(d => d.AccountId == request.AccountId);
+
+            if (donor != null)
+            {
+                donor.FullName = request.FullName;
+                donor.Address = request.Address;
+                donor.Phone = request.Phone;
+                if (donor.Account != null)
+                {
+                    donor.Account.PhoneNumber = request.Phone;
+                }
+                await context.SaveChangesAsync(default);
+                return TypedResults.Ok(new { message = "Cập nhật hồ sơ nhà tài trợ thành công!" });
+            }
+
+            // Nếu tài khoản có vai trò Donor nhưng chưa có bản ghi trong bảng Donors, tạo mới
+            var account = await userManager.FindByIdAsync(request.AccountId.ToString());
+            if (account != null)
+            {
+                var isDonor = await userManager.IsInRoleAsync(account, "Donor");
+                if (isDonor)
+                {
+                    donor = new Donor
+                    {
+                        AccountId = request.AccountId,
+                        FullName = request.FullName,
+                        Address = request.Address,
+                        Phone = request.Phone,
+                        Email = account.Email
+                    };
+                    context.Donors.Add(donor);
+                    account.PhoneNumber = request.Phone;
+                    await context.SaveChangesAsync(default);
+                    return TypedResults.Ok(new { message = "Tạo mới và cập nhật hồ sơ nhà tài trợ thành công!" });
+                }
+            }
+
+            return TypedResults.BadRequest("Không tìm thấy hồ sơ người nhận nuôi hoặc nhà tài trợ tương ứng.");
+        }
+
+        adopter.FullName = request.FullName;
+        adopter.IDCard = request.IdCard;
+        adopter.MaritalStatus = request.MaritalStatus;
+        adopter.Address = request.Address;
+        adopter.FinancialStatus = $"Thu nhập: {request.IncomeScope} | Nghề nghiệp: {request.Occupation}";
+
+        if (adopter.Account != null)
+        {
+            adopter.Account.PhoneNumber = request.Phone;
+        }
+
+        await context.SaveChangesAsync(default);
+
+        return TypedResults.Ok(new { message = "Cập nhật hồ sơ cá nhân thành công!" });
+    }
+
     public class LoginRequest
     {
         public string Email { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
+    }
+
+    public class CompleteProfileRequest
+    {
+        public Guid AccountId { get; set; }
+        public string FullName { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string IdCard { get; set; } = string.Empty;
+        public string MaritalStatus { get; set; } = string.Empty;
+        public string Address { get; set; } = string.Empty;
+        public string Occupation { get; set; } = string.Empty;
+        public string IncomeScope { get; set; } = string.Empty;
     }
 }

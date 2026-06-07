@@ -23,7 +23,7 @@ public class GetAdoptersQueryHandler(IApplicationDbContext context, IMapper mapp
         }
 
         return await query
-            .OrderBy(t => t.FullName)
+            .OrderByDescending(t => t.Created)
             .ProjectTo<AdopterDto>(mapper.ConfigurationProvider)
             .PaginatedListAsync(request.PageNumber, request.PageSize);
     }

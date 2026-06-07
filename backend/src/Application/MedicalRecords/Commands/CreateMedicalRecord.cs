@@ -1,8 +1,10 @@
 using backend.Application.Common.Interfaces;
+using backend.Application.Common.Security;
 using backend.Domain.Entities;
 
 namespace backend.Application.MedicalRecords.Commands.CreateMedicalRecord;
 
+[Authorize(Roles = "CareGiver,Director,Manager")]
 public record CreateMedicalRecordCommand : IRequest<Guid>
 {
     public Guid? ChildId { get; init; }

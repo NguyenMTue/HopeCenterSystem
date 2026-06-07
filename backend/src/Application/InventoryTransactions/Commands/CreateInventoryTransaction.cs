@@ -36,17 +36,21 @@ public class CreateInventoryTransactionCommandHandler(IApplicationDbContext cont
             TransactionDate = DateTime.UtcNow
         };
 
-        if (request.Type == TransactionType.Import)
+        var isPending = request.Notes != null && request.Notes.Contains("[ĐANG CHỜ DUYỆT]");
+        if (!isPending)
         {
-            item.CurrentQuantity += request.Quantity;
-        }
-        else if (request.Type == TransactionType.Export)
-        {
-            if (item.CurrentQuantity < request.Quantity)
+            if (request.Type == TransactionType.Import)
             {
-                throw new InvalidOperationException($"Số lượng trong kho không đủ để xuất (Hiện có: {item.CurrentQuantity}, Yêu cầu: {request.Quantity})");
+                item.CurrentQuantity += request.Quantity;
             }
-            item.CurrentQuantity -= request.Quantity;
+            else if (request.Type == TransactionType.Export)
+            {
+                if (item.CurrentQuantity < request.Quantity)
+                {
+                    throw new InvalidOperationException($"Số lượng trong kho không đủ để xuất (Hiện có: {item.CurrentQuantity}, Yêu cầu: {request.Quantity})");
+                }
+                item.CurrentQuantity -= request.Quantity;
+            }
         }
 
         context.InventoryTransactions.Add(entity);

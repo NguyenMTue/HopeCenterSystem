@@ -1,6 +1,7 @@
 using backend.Application.Notifications.Commands.CreateNotification;
 using backend.Application.Notifications.Commands.DeleteNotification;
 using backend.Application.Notifications.Commands.UpdateNotification;
+using backend.Application.Notifications.Commands.BroadcastNotification;
 using backend.Application.Notifications.Queries.GetNotifications;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -13,6 +14,7 @@ public class Notifications : IEndpointGroup
         groupBuilder.RequireAuthorization();
         groupBuilder.MapGet(GetNotifications, "");
         groupBuilder.MapPost(CreateNotification, "");
+        groupBuilder.MapPost(BroadcastNotification, "broadcast");
         groupBuilder.MapPut(MarkAsRead, "{id}/mark-as-read");
         groupBuilder.MapDelete(DeleteNotification, "{id}");
     }
@@ -27,6 +29,12 @@ public class Notifications : IEndpointGroup
     {
         var id = await sender.Send(command);
         return TypedResults.Created($"/api/Notifications/{id}", id);
+    }
+
+    public static async Task<NoContent> BroadcastNotification(ISender sender, BroadcastNotificationCommand command)
+    {
+        await sender.Send(command);
+        return TypedResults.NoContent();
     }
 
     public static async Task<NoContent> MarkAsRead(ISender sender, Guid id)

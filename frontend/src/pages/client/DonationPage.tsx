@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { Typography, Row, Col, Form, Input, Select, Tabs, Button, Alert, message, Space } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Typography, Row, Col, Form, Input, Select, Tabs, Button, Alert, message, Space, InputNumber } from 'antd';
 import { 
   BankOutlined, 
   InfoCircleOutlined,
   ExclamationCircleOutlined
 } from '@ant-design/icons';
+import apiClient from '../../services/apiClient';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -13,6 +14,22 @@ const DonationPage: React.FC = () => {
   const [moneyForm] = Form.useForm();
   const [itemsForm] = Form.useForm();
   const [selectedAmount, setSelectedAmount] = useState<number | 'other'>(200000);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const res = await apiClient.get('/api/Users/me');
+          setCurrentUser(res.data);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    };
+    fetchUser();
+  }, []);
 
   const presetAmounts: { value: number | 'other', label: string }[] = [
     { value: 200000, label: '200,000' },
@@ -23,16 +40,84 @@ const DonationPage: React.FC = () => {
     { value: 'other', label: 'Khác...' },
   ];
 
-  const handleMoneySubmit = (values: any) => {
-    message.loading({ content: 'Hệ thống đang chuyển hướng sang Cổng thanh toán VNPay...', key: 'donate' });
-    setTimeout(() => {
-      message.success({ content: 'Chuyển hướng thành công!', key: 'donate', duration: 2 });
-    }, 2000);
+  const handleMoneySubmit = async (values: any) => {
+    const amountVal = selectedAmount === 'other' ? Number(values.customAmount) : Number(selectedAmount);
+    
+    if (currentUser && currentUser.roles?.includes('Donor')) {
+      message.loading({ content: 'Hệ thống đang ghi nhận khoản quyên góp vào lịch sử tài trợ của bạn...', key: 'donate' });
+      try {
+        await apiClient.post('/api/Donations/submit', {
+          donationType: 0,
+          totalAmount: amountVal,
+          inventoryItemId: null,
+          quantity: null
+        });
+        message.success({ 
+          content: 'Quyên góp thành công! Khoản tài trợ của bạn đã được ghi nhận tự động. Hãy vào Cổng tài trợ để theo dõi tiến độ giải ngân.', 
+          key: 'donate', 
+          duration: 4 
+        });
+        moneyForm.resetFields();
+        setSelectedAmount(200000);
+      } catch (error) {
+        console.error(error);
+        message.error({ content: 'Có lỗi xảy ra khi ghi nhận khoản tài trợ.', key: 'donate' });
+      }
+    } else {
+      message.loading({ content: 'Hệ thống đang ghi nhận khoản quyên góp của bạn...', key: 'donate' });
+      try {
+        await apiClient.post('/api/Donations/submit', {
+          donationType: 0,
+          totalAmount: amountVal,
+          inventoryItemId: null,
+          quantity: null,
+          guestName: values.fullName,
+          guestContact: values.contact,
+          details: values.message || null
+        });
+        message.success({ 
+          content: 'Quyên góp thành công! Cảm ơn tấm lòng hảo tâm của bạn. Hãy đăng ký tài khoản Nhà tài trợ để theo dõi chi tiết giải ngân.', 
+          key: 'donate', 
+          duration: 5 
+        });
+        moneyForm.resetFields();
+        setSelectedAmount(200000);
+      } catch (error) {
+        console.error(error);
+        message.error({ content: 'Có lỗi xảy ra khi ghi nhận khoản quyên góp.', key: 'donate' });
+      }
+    }
   };
 
-  const handleItemsSubmit = (values: any) => {
-    message.success({ content: 'Đã ghi nhận thông tin gửi hiện vật. Bộ phận Quản lý Vật tư sẽ liên hệ với bạn trong 24h tới. Xin cảm ơn!', duration: 4 });
-    itemsForm.resetFields();
+  const handleItemsSubmit = async (values: any) => {
+    if (currentUser && currentUser.roles?.includes('Donor')) {
+      message.info({
+        content: 'Vui lòng thực hiện tài trợ hiện vật trực tiếp tại "Cổng tài trợ" trong trang quản trị để được cập nhật kho và theo dõi giải ngân tự động!',
+        duration: 5
+      });
+    } else {
+      message.loading({ content: 'Đang gửi thông tin đăng ký tài trợ hiện vật...', key: 'itemsDonate' });
+      try {
+        await apiClient.post('/api/Donations/submit', {
+          donationType: 1,
+          totalAmount: 0,
+          inventoryItemId: null,
+          quantity: 1,
+          guestName: values.senderName,
+          category: values.category,
+          details: `${values.details} (Hình thức: ${values.delivery})`
+        });
+        message.success({ 
+          content: 'Đăng ký tài trợ hiện vật thành công! Ban quản lý sẽ tiếp nhận và liên hệ với bạn. Xin cảm ơn!', 
+          key: 'itemsDonate', 
+          duration: 5 
+        });
+        itemsForm.resetFields();
+      } catch (error) {
+        console.error(error);
+        message.error({ content: 'Có lỗi xảy ra khi đăng ký tài trợ hiện vật.', key: 'itemsDonate' });
+      }
+    }
   };
 
   const moneyTabContent = (
@@ -60,7 +145,16 @@ const DonationPage: React.FC = () => {
           ))}
         </div>
         {selectedAmount === 'other' && (
-          <Input size="large" placeholder="Nhập số tiền bạn muốn đóng góp..." style={{ borderRadius: '8px' }} />
+          <Form.Item name="customAmount" noStyle rules={[{ required: true, message: 'Vui lòng nhập số tiền!' }]}>
+            <InputNumber 
+              size="large" 
+              placeholder="Nhập số tiền bạn muốn đóng góp..." 
+              style={{ borderRadius: '8px', width: '100%' }} 
+              min={10000}
+              formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              parser={(value) => (value ? value.replace(/\$\s?|(,*)|\s?/g, '') : '') as any}
+            />
+          </Form.Item>
         )}
       </Form.Item>
 

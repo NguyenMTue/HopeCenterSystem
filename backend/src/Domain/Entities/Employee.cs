@@ -16,6 +16,7 @@ public class Employee : BaseAuditableEntity
     [ForeignKey("AccountId")]
     public virtual Account Account { get; set; } = null!;
     public virtual ICollection<CarePlan> ApprovedCarePlans { get; set; } = new List<CarePlan>();
+    public virtual ICollection<CarePlan> CarePlans { get; set; } = new List<CarePlan>();
     public virtual ICollection<CareLog> CareLogs { get; set; } = new List<CareLog>();
     public virtual ICollection<Incident> ReportedIncidents { get; set; } = new List<Incident>();
     public virtual ICollection<TaskAssignment> AssignedTasks { get; set; } = new List<TaskAssignment>();

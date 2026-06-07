@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using backend.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -17,9 +17,11 @@ public class ApplicationDbContext : IdentityDbContext<Account, Role, Guid>, IApp
     public DbSet<Room> Rooms => Set<Room>();
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<Adopter> Adopters => Set<Adopter>();
+    public DbSet<Donor> Donors => Set<Donor>();
     public DbSet<Child> Children => Set<Child>();
     public DbSet<MedicalRecord> MedicalRecords => Set<MedicalRecord>();
     public DbSet<CarePlan> CarePlans => Set<CarePlan>();
+    public DbSet<CarePlanSupply> CarePlanSupplies => Set<CarePlanSupply>();
     public DbSet<CareLog> CareLogs => Set<CareLog>();
     public DbSet<Incident> Incidents => Set<Incident>();
     public DbSet<TaskAssignment> TaskAssignments => Set<TaskAssignment>();
@@ -31,6 +33,8 @@ public class ApplicationDbContext : IdentityDbContext<Account, Role, Guid>, IApp
     public DbSet<DonationAllocation> DonationAllocations => Set<DonationAllocation>();
     public DbSet<PostAdoptionFollowUp> PostAdoptionFollowUps => Set<PostAdoptionFollowUp>();
     public DbSet<ChildStatusHistory> ChildStatusHistories => Set<ChildStatusHistory>();
+    public DbSet<DailyCareTask> DailyCareTasks => Set<DailyCareTask>();
+    public DbSet<Vaccination> Vaccinations => Set<Vaccination>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -57,6 +61,12 @@ public class ApplicationDbContext : IdentityDbContext<Account, Role, Guid>, IApp
             .HasOne(ad => ad.Account)
             .WithOne(a => a.Adopter)
             .HasForeignKey<Adopter>(ad => ad.AccountId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<Donor>()
+            .HasOne(d => d.Account)
+            .WithOne(a => a.Donor)
+            .HasForeignKey<Donor>(d => d.AccountId)
             .OnDelete(DeleteBehavior.Cascade);
 
         // 3. Cấu hình TaskAssignment (Bạn đã làm đúng, giữ lại)

@@ -1,4 +1,4 @@
-﻿using backend.Application.Common.Interfaces;
+using backend.Application.Common.Interfaces;
 using backend.Domain.Entities;
 using backend.Infrastructure.Data;
 using backend.Infrastructure.Data.Interceptors;
@@ -66,6 +66,7 @@ public static class DependencyInjection
         });
 
         builder.Services.AddScoped<ApplicationDbContextInitialiser>();
+        builder.Services.AddScoped<ISystemLogService, backend.Infrastructure.Services.SystemLogService>();
 
         // builder.Services.AddAuthentication(options =>
         //     {

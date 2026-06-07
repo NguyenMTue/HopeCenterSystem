@@ -1,9 +1,11 @@
-﻿
+
 using backend.Domain.Entities;
 using backend.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.IO;
+using Microsoft.Data.SqlClient;
 
 namespace backend.Infrastructure.Data;
 
@@ -30,10 +32,103 @@ public class ApplicationDbContextInitialiser
     {
         try
         {
-            _logger.LogWarning("Đang RESET Database... Toàn bộ dữ liệu cũ sẽ bị XÓA SẠCH!");
-            
-            // Xóa toàn bộ Database (Chỉ áp dụng trong lúc Dev)
-            await _context.Database.EnsureDeletedAsync();
+            _logger.LogInformation("Đang kiểm tra và chạy Migration cho Database...");
+
+            // Tự động kiểm tra và tạo database thủ công trước để tránh lỗi timeout ALTER DATABASE của EF Core
+            var connStr = _context.Database.GetConnectionString();
+            if (!string.IsNullOrEmpty(connStr))
+            {
+                var builder = new SqlConnectionStringBuilder(connStr);
+                var databaseName = builder.InitialCatalog;
+
+                if (!string.IsNullOrEmpty(databaseName) && 
+                    !databaseName.Equals("master", StringComparison.OrdinalIgnoreCase) && 
+                    !databaseName.Equals("tempdb", StringComparison.OrdinalIgnoreCase))
+                {
+                    builder.InitialCatalog = "master";
+                    var masterConnStr = builder.ConnectionString;
+
+                    using (var conn = new SqlConnection(masterConnStr))
+                    {
+                        // Thêm cơ chế thử lại (Retry) để xử lý trường hợp SQL Server Container vừa khởi động
+                        // nhưng chưa hoàn thành việc thiết lập mật khẩu sa (race condition của Aspire)
+                        int maxRetries = 10;
+                        int delayMs = 2000;
+                        for (int retry = 1; retry <= maxRetries; retry++)
+                        {
+                            try
+                            {
+                                await conn.OpenAsync();
+                                break; // Thành công!
+                            }
+                            catch (SqlException ex)
+                            {
+                                if (retry == maxRetries)
+                                {
+                                    throw; // Ném lỗi nếu đã hết số lần thử lại
+                                }
+                                _logger.LogWarning(ex, "Thử kết nối đến SQL Server thất bại (Lần {Retry}/{MaxRetries}). Đang thử lại sau {Delay}ms...", retry, maxRetries, delayMs);
+                                await Task.Delay(delayMs);
+                            }
+                        }
+
+                        // 1. Kiểm tra database tồn tại
+                        var checkDbSql = "SELECT database_id FROM sys.databases WHERE name = @DbName";
+                        object? dbId = null;
+                        using (var cmd = new SqlCommand(checkDbSql, conn))
+                        {
+                            cmd.Parameters.AddWithValue("@DbName", databaseName);
+                            dbId = await cmd.ExecuteScalarAsync();
+                        }
+
+                        if (dbId == null)
+                        {
+                            _logger.LogInformation("Cơ sở dữ liệu '{DbName}' chưa tồn tại. Tiến hành tạo thủ công...", databaseName);
+                            
+                            var createDbSql = $"CREATE DATABASE [{databaseName}]";
+                            using (var cmd = new SqlCommand(createDbSql, conn))
+                            {
+                                await cmd.ExecuteNonQueryAsync();
+                            }
+
+                            _logger.LogInformation("Đã tạo cơ sở dữ liệu '{DbName}'. Kích hoạt snapshot isolation...", databaseName);
+                            
+                            var enableSnapshotSql = $"ALTER DATABASE [{databaseName}] SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE";
+                            using (var cmd = new SqlCommand(enableSnapshotSql, conn))
+                            {
+                                await cmd.ExecuteNonQueryAsync();
+                            }
+                        }
+                        else
+                        {
+                            // Database đã tồn tại, kiểm tra xem READ_COMMITTED_SNAPSHOT đã bật chưa
+                            var checkSnapshotSql = "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = @DbName";
+                            bool isSnapshotOn = false;
+                            using (var cmd = new SqlCommand(checkSnapshotSql, conn))
+                            {
+                                cmd.Parameters.AddWithValue("@DbName", databaseName);
+                                var result = await cmd.ExecuteScalarAsync();
+                                isSnapshotOn = result != null && (bool)result;
+                            }
+
+                            if (!isSnapshotOn)
+                            {
+                                _logger.LogInformation("READ_COMMITTED_SNAPSHOT chưa được bật cho '{DbName}'. Tiến hành kích hoạt an toàn...", databaseName);
+                                
+                                var enableSnapshotSql = $@"
+                                    ALTER DATABASE [{databaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+                                    ALTER DATABASE [{databaseName}] SET READ_COMMITTED_SNAPSHOT ON;
+                                    ALTER DATABASE [{databaseName}] SET MULTI_USER;";
+                                
+                                using (var cmd = new SqlCommand(enableSnapshotSql, conn))
+                                {
+                                    await cmd.ExecuteNonQueryAsync();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             
             // Chạy Migration để tạo lại cấu trúc bảng mới nhất
             await _context.Database.MigrateAsync();
@@ -72,8 +167,9 @@ public class ApplicationDbContextInitialiser
             ("Administrator", "Quản trị hệ thống"), 
             ("Director", "Giám đốc trung tâm"), 
             ("Manager", "Quản lý phòng ban"), 
-            ("CareGiver", "Nhân viên chăm sóc"), 
-            ("Adopter", "Người nhận nuôi") 
+            ("CareGiver", "Nhân viên chăm sóc"),    
+            ("Adopter", "Người nhận nuôi"),
+            ("Donor", "Nhà tài trợ") 
         };
 
         foreach (var roleInfo in roles)
@@ -94,14 +190,14 @@ public class ApplicationDbContextInitialiser
         // ==========================================
         
         // 2.1 Tạo Admin (1 người)
-        var adminEmail = "admin@hopecenter.com";
+        var adminEmail = "tue1@gmail.com";
         var adminUser = await _userManager.FindByEmailAsync(adminEmail);
         
         if (adminUser == null)
         {
             _logger.LogInformation("Đang tạo tài khoản Admin mặc định...");
             var adminAccount = new Account { UserName = adminEmail, Email = adminEmail, IsActive = true, EmailConfirmed = true };
-            var result = await _userManager.CreateAsync(adminAccount, "Admin@123!");
+            var result = await _userManager.CreateAsync(adminAccount, "Admin@123");
             
             if (result.Succeeded)
             {
@@ -130,11 +226,11 @@ public class ApplicationDbContextInitialiser
         }
 
         // 2.2 Tạo Giám đốc (1 người)
-        var directorEmail = "director@hopecenter.com";
+        var directorEmail = "tue2@gmail.com";
         var directorAccount = new Account { UserName = directorEmail, Email = directorEmail, IsActive = true, EmailConfirmed = true };
         if (!await _userManager.Users.AnyAsync(u => u.Email == directorEmail))
         {
-            await _userManager.CreateAsync(directorAccount, "Director@123!");
+            await _userManager.CreateAsync(directorAccount, "Director@123");
             await _userManager.AddToRoleAsync(directorAccount, "Director");
 
             _context.Employees.Add(new Employee
@@ -157,18 +253,18 @@ public class ApplicationDbContextInitialiser
         // 3.1 Tạo Quản lý trung tâm (2 người)
         for (int i = 1; i <= 2; i++)
         {
-            var username = $"manager{i}";
+            var username = i == 1 ? "tue3" : $"manager{i}";
             var managerAccount = new Account { UserName = username, Email = $"{username}@hopecenter.com", IsActive = true, EmailConfirmed = true };
             
             if (!await _userManager.Users.AnyAsync(u => u.UserName == managerAccount.UserName))
             {
-                await _userManager.CreateAsync(managerAccount, "Manager@123!");
+                await _userManager.CreateAsync(managerAccount, "Manager@123");
                 await _userManager.AddToRoleAsync(managerAccount, "Manager");
 
                 _context.Employees.Add(new Employee
                 {
                     AccountId = managerAccount.Id,
-                    FullName = $"Quản Lý {i}",
+                    FullName = i == 1 ? "Quản Lý Tuệ 3" : $"Quản Lý {i}",
                     Position = "Quản lý phòng ban",
                     Phone = $"092200000{i}",
                     DOB = new DateTime(1985, 1, 1).AddYears(i)
@@ -192,18 +288,18 @@ public class ApplicationDbContextInitialiser
 
         for (int i = 0; i < 10; i++)
         {
-            var username = $"staff{i + 1}";
+            var username = i == 0 ? "tue4" : $"staff{i + 1}";
             var staffAccount = new Account { UserName = username, Email = $"{username}@hopecenter.com", IsActive = true, EmailConfirmed = true };
             
             if (!await _userManager.Users.AnyAsync(u => u.UserName == staffAccount.UserName))
             {
-                await _userManager.CreateAsync(staffAccount, "Staff@123!");
+                await _userManager.CreateAsync(staffAccount, "Staff@123");
                 await _userManager.AddToRoleAsync(staffAccount, "CareGiver");
 
                 _context.Employees.Add(new Employee
                 {
                     AccountId = staffAccount.Id,
-                    FullName = employeeNames[i],
+                    FullName = i == 0 ? "Nhân Viên Tuệ 4" : employeeNames[i],
                     Position = positions[i],
                     Phone = $"0933000{i:D3}", // Tạo SĐT giả lập: 0933000000, 0933000001...
                     DOB = new DateTime(1985, 1, 1).AddMonths(i * 15).AddDays(i * 7) // Tạo ngày sinh ngẫu nhiên
@@ -224,18 +320,18 @@ public class ApplicationDbContextInitialiser
 
         for (int i = 0; i < 10; i++)
         {
-            var username = $"adopter{i + 1}";
-            var adopterAccount = new Account { UserName = username, Email = $"{username}@gmail.com", IsActive = true, EmailConfirmed = true };
+            var username = i == 0 ? "tue5" : $"adopter{i + 1}";
+            var adopterAccount = new Account { UserName = username, Email = i == 0 ? "tue5@gmail.com" : $"{username}@gmail.com", IsActive = true, EmailConfirmed = true };
             
             if (!await _userManager.Users.AnyAsync(u => u.UserName == adopterAccount.UserName))
             {
-                await _userManager.CreateAsync(adopterAccount, "Adopter@123!");
+                await _userManager.CreateAsync(adopterAccount, "Adopter@123");
                 await _userManager.AddToRoleAsync(adopterAccount, "Adopter");
 
                 _context.Adopters.Add(new Adopter
                 {
                     AccountId = adopterAccount.Id,
-                    FullName = adopterNames[i],
+                    FullName = i == 0 ? "Người Nhận Nuôi Tuệ 5" : adopterNames[i],
                     IDCard = $"0480900012{i + 1:D2}", // Đảm bảo số CCCD từ 01 đến 10
                     FinancialStatus = i % 2 == 0 ? "Thu nhập ổn định (Mức khá)" : "Thu nhập trung bình",
                     MaritalStatus = i % 3 == 0 ? "Độc thân" : "Đã kết hôn",
@@ -471,24 +567,41 @@ public class ApplicationDbContextInitialiser
                     ChildId = child.Id,
                     // Khám từ 1 đến 5 ngày sau khi được tiếp nhận vào trung tâm
                     CheckupDate = child.AdmissionDate.AddDays(random.Next(1, 5)), 
-                    Diagnosis = "Khám sức khỏe tổng quát ban đầu",
+                    Diagnosis = MedicalDiagnoses.GeneralCheckup,
                     Treatment = "Bổ sung vitamin, thiết lập chế độ dinh dưỡng theo độ tuổi.",
                     DoctorName = doctors[random.Next(doctors.Count)],
                     Notes = "Thể trạng cơ bản ổn định lúc tiếp nhận."
                 });
 
-                // 2. Tạo thêm hồ sơ bệnh án cho những bé đang nằm viện (Hospitalized)
-                if (child.Status == ChildStatus.Hospitalized)
+                // 2. Tạo thêm hồ sơ bệnh án cho những bé đang nằm viện (Hospitalized) hoặc một vài bé ở Khu Mầm Non cần theo dõi y tế/uống thuốc
+                if (child.Status == ChildStatus.Hospitalized || child.FullName == "Trần Bảo Châu" || child.FullName == "Lê Hoàng Bách")
                 {
+                    string diagnosis = MedicalDiagnoses.RespiratoryInfection;
+                    string treatment = "Sử dụng kháng sinh theo phác đồ, truyền dịch tĩnh mạch và theo dõi tại phòng Y tế.";
+                    string notes = "Bé có dấu hiệu sốt và lười ăn, cần theo dõi nhiệt độ 4 tiếng/lần.";
+
+                    if (child.FullName == "Trần Bảo Châu")
+                    {
+                        diagnosis = MedicalDiagnoses.FeverAndCough;
+                        treatment = "Uống thuốc hạ sốt Hapacol 150mg khi sốt > 38.5 độ (cách 4-6 tiếng), siro ho thảo dược Prospan 2.5ml x 3 lần/ngày.";
+                        notes = "Cần theo dõi nhiệt độ và cho uống siro sau ăn.";
+                    }
+                    else if (child.FullName == "Lê Hoàng Bách")
+                    {
+                        diagnosis = MedicalDiagnoses.ProbioticsAndZinc;
+                        treatment = "Uống men vi sinh Enterogermina 1 ống/ngày, bổ sung kẽm Biolizin 1ml/ngày sau bữa ăn sáng.";
+                        notes = "Uống sau ăn sáng 30 phút.";
+                    }
+
                     medicalRecords.Add(new MedicalRecord
                     {
                         ChildId = child.Id,
-                        // Khám trong vòng 30 ngày đổ lại
-                        CheckupDate = DateTime.UtcNow.AddDays(-random.Next(1, 30)), 
-                        Diagnosis = child.HealthStatus ?? "Viêm đường hô hấp / Suy dinh dưỡng",
-                        Treatment = "Sử dụng kháng sinh theo phác đồ, truyền dịch tĩnh mạch và theo dõi tại phòng Y tế.",
+                        // Khám trong vòng 15 ngày đổ lại
+                        CheckupDate = DateTime.UtcNow.AddDays(-random.Next(1, 15)), 
+                        Diagnosis = diagnosis,
+                        Treatment = treatment,
                         DoctorName = doctors[random.Next(doctors.Count)],
-                        Notes = "Bé có dấu hiệu sốt và lười ăn, cần theo dõi nhiệt độ 4 tiếng/lần."
+                        Notes = notes
                     });
                 }
             }
@@ -510,11 +623,24 @@ public class ApplicationDbContextInitialiser
             // Lấy danh sách nhân viên trực tiếp chăm sóc (Bảo mẫu, Y tá)
             var caregivers = await _context.Employees.Where(e => e.Position!.Contains("Bảo mẫu") || e.Position!.Contains("Y tá")).ToListAsync();
             
+            // Lấy bảo mẫu tue4 đặc thù
+            var caregiverTue4 = await _context.Employees.FirstOrDefaultAsync(e => e.FullName == "Nhân Viên Tuệ 4");
+            
             // Lấy 5 trẻ em để tạo kế hoạch (Ưu tiên đưa các bé đang nằm viện lên đầu)
             var targetChildren = await _context.Children
+                .Include(c => c.Room)
                 .OrderByDescending(c => c.Status == ChildStatus.Hospitalized)
                 .Take(5)
                 .ToListAsync();
+
+            // Đảm bảo có ít nhất 1 trẻ thuộc Khu Mầm Non để Bảo mẫu tue4 có dữ liệu kế hoạch kiểm thử
+            var mamNonChild = await _context.Children
+                .Include(c => c.Room)
+                .FirstOrDefaultAsync(c => c.Room != null && c.Room.Location == "Khu Mầm Non");
+            if (mamNonChild != null && !targetChildren.Any(c => c.Id == mamNonChild.Id))
+            {
+                targetChildren.Add(mamNonChild);
+            }
 
             if (approver != null && caregivers.Any())
             {
@@ -525,6 +651,17 @@ public class ApplicationDbContextInitialiser
                 {
                     bool isHospitalized = child.Status == ChildStatus.Hospitalized;
                     
+                    // Gán người chịu trách nhiệm trực tiếp
+                    Guid? assignedEmployeeId = null;
+                    if (child.Room != null && child.Room.Location == "Khu Mầm Non" && caregiverTue4 != null)
+                    {
+                        assignedEmployeeId = caregiverTue4.Id;
+                    }
+                    else
+                    {
+                        assignedEmployeeId = caregivers[random.Next(caregivers.Count)].Id;
+                    }
+
                     var plan = new CarePlan
                     {
                         Id = Guid.NewGuid(), // Khởi tạo ID trước để dùng làm khóa ngoại cho CareLog ở bước dưới
@@ -533,6 +670,7 @@ public class ApplicationDbContextInitialiser
                         StartDate = DateTime.UtcNow.AddDays(-random.Next(5, 15)), // Bắt đầu từ 5-15 ngày trước
                         EndDate = DateTime.UtcNow.AddDays(random.Next(15, 30)),   // Dự kiến kết thúc trong 15-30 ngày tới
                         ApproverId = approver.Id,
+                        EmployeeId = assignedEmployeeId,
                         Status = ApplicationStatus.Approved // Set trạng thái đã duyệt để có thể ghi Log
                     };
                     
@@ -823,9 +961,42 @@ public class ApplicationDbContextInitialiser
         {
             var random = new Random(2026);
             var attachments = new List<Attachment>();
-            
-            // 1. Đính kèm file cho Trẻ em (Lấy 5 bé đầu tiên)
-            var childrenForDocs = await _context.Children.Take(5).ToListAsync();
+
+            var maleFallback = new List<string>
+            {
+                "https://icdn.dantri.com.vn/2017/screen-shot-2017-01-21-at-10-21-23-pm-1485012132149.png",
+                "https://kenh14cdn.com/2017/be-trai-2-1485058669494.jpg",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQdD_h_WJQT9lL2PJuKBra6n7OGmAsLtPmKNw&s",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRPg5QKftKwrjZz6WXNFskPHwgfuGImL_l9Xg&s",
+                "https://sohanews.sohacdn.com/zoom/480_300/160588918557773824/2023/5/4/photo1683169576919-1683169577002830572929.jpg",
+                "https://demcanada.com/wp-content/uploads/2025/10/hinh-anh-em-be-trai-de-thuong-1.jpg",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR9QOq4iM1PnpNCfHyUUs_pefdnB21rOLx0oQ&s",
+                "https://icdn.dantri.com.vn/063efc1ba7/2016/10/14/chan-dung-chau-phuc-bi-mat-tich-khi-di-hoc-vao-ngay-12-10-vua-qua-anh-do-gia-dinh-nan-nhan-cung-cap-1476457613421.jpg",
+                "https://nld.mediacdn.vn/thumb_w/698/291774122806476800/2023/5/29/mat-tich-1-1685352618015484942537.jpg",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSfks4UUPZAS7-bdbzDrYeZgMeRi3lKFbutUw&s",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTgtE5OGer78nqaDhYwdal-cvwPD4cThlZTMhrIdVy3MQ&s"
+            };
+
+            var femaleFallback = new List<string>
+            {
+                "https://bizweb.dktcdn.net/100/175/849/files/chup-anh-the-dep-cho-hoc-sinh-02.jpg?v=1609569926960",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSWBoHQBEH4IYavTJsOR_NffDvUOxaW_mMZnQ&s",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR-r_KOdR1Kq33gLVjE83F_RYro-GC6RllcKg&s",
+                "https://img.freepik.com/premium-photo/portrait-asian-child-background_296537-9746.jpg",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRPrfF1qzJe_ueItigmcxab34qjVkEn-2ldng&s",
+                "https://www.shutterstock.com/image-photo/happy-cute-asian-girl-portrait-260nw-157109024.jpg",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQij-4YygltV261MhC8BZzA6B5MqylfvLwuFw&s",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQjdVEXuAmeyNR674pbEDcSH5YNIE_sAdtp-w&s",
+                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSFZRa0pID0C7egf9uiY6lME0GJensl8jP0zg&s",
+                "https://imgs.vietnamnet.vn/Images/2015/09/01/14/20150901143006-5.jpg?width=0&s=D3mYOe_kQpYgGmwRwWzyYw",
+                "https://afamilycdn.com/2018/7/7/1-1-1530975935139557582555.jpg"
+            };
+
+            var maleImages = ReadImageLinks("male.txt", maleFallback);
+            var femaleImages = ReadImageLinks("female.txt", femaleFallback);
+
+            // 1. Đính kèm file cho Trẻ em (Tất cả trẻ)
+            var childrenForDocs = await _context.Children.ToListAsync();
             foreach (var child in childrenForDocs)
             {
                 // File Giấy khai sinh
@@ -840,13 +1011,23 @@ public class ApplicationDbContextInitialiser
                     UploadedAt = DateTime.UtcNow.AddDays(-random.Next(10, 100))
                 });
                 
-                // File Ảnh đại diện
+                // File Ảnh đại diện ngẫu nhiên
+                string avatarPath;
+                if (child.Gender == Gender.Male)
+                {
+                    avatarPath = maleImages[random.Next(maleImages.Count)];
+                }
+                else
+                {
+                    avatarPath = femaleImages[random.Next(femaleImages.Count)];
+                }
+
                 attachments.Add(new Attachment
                 {
                     TargetId = child.Id,
                     TargetType = AttachmentTargetType.Child,
                     FileName = $"Avatar_{child.FullName.Replace(" ", "_")}.jpg",
-                    FilePath = $"/uploads/children/avatars/{Guid.NewGuid()}.jpg",
+                    FilePath = avatarPath,
                     FileType = "image/jpeg",
                     FileSize = random.Next(100, 500) * 1024, // Random từ 100KB đến 500KB
                     UploadedAt = DateTime.UtcNow.AddDays(-random.Next(10, 100))
@@ -1011,28 +1192,28 @@ public class ApplicationDbContextInitialiser
         // ==========================================
         if (!_context.SystemLogs.Any())
         {
-            var adminAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "admin");
-            var directorAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "director");
-            var managerAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "manager1");
+            var adminAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "tue1@gmail.com");
+            var directorAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "tue2@gmail.com");
+            var managerAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "tue3");
 
             var logs = new List<SystemLog>();
 
             if (adminAcc != null)
             {
-                logs.Add(new SystemLog { AccountId = adminAcc.Id, Action = "Login", Module = "Auth", Details = "Admin đăng nhập hệ thống thành công.", Created = DateTime.UtcNow.AddHours(-2), IpAddress = "192.168.1.10" });
-                logs.Add(new SystemLog { AccountId = adminAcc.Id, Action = "Backup", Module = "System", Details = "Hệ thống tự động sao lưu dữ liệu định kỳ.", Created = DateTime.UtcNow.AddDays(-1), IpAddress = "127.0.0.1" });
+                logs.Add(new SystemLog { AccountId = adminAcc.Id, Action = "Login", Module = "Auth", Details = "Admin đăng nhập hệ thống thành công.", Timestamp = DateTime.UtcNow.AddHours(-2), IpAddress = "192.168.1.10" });
+                logs.Add(new SystemLog { AccountId = adminAcc.Id, Action = "Backup", Module = "System", Details = "Hệ thống tự động sao lưu dữ liệu định kỳ.", Timestamp = DateTime.UtcNow.AddDays(-1), IpAddress = "127.0.0.1" });
             }
 
             if (directorAcc != null)
             {
-                logs.Add(new SystemLog { AccountId = directorAcc.Id, Action = "Approve", Module = "Adoption", Details = "Giám đốc phê duyệt đơn nhận nuôi mã #AD-2024.", Created = DateTime.UtcNow.AddDays(-5), IpAddress = "192.168.1.15" });
-                logs.Add(new SystemLog { AccountId = directorAcc.Id, Action = "UpdateStatus", Module = "Children", Details = "Cập nhật trạng thái trẻ: Chuyển sang Đã được nhận nuôi.", Created = DateTime.UtcNow.AddDays(-5), IpAddress = "192.168.1.15" });
+                logs.Add(new SystemLog { AccountId = directorAcc.Id, Action = "Approve", Module = "Adoption", Details = "Giám đốc phê duyệt đơn nhận nuôi mã #AD-2024.", Timestamp = DateTime.UtcNow.AddDays(-5), IpAddress = "192.168.1.15" });
+                logs.Add(new SystemLog { AccountId = directorAcc.Id, Action = "UpdateStatus", Module = "Children", Details = "Cập nhật trạng thái trẻ: Chuyển sang Đã được nhận nuôi.", Timestamp = DateTime.UtcNow.AddDays(-5), IpAddress = "192.168.1.15" });
             }
 
             if (managerAcc != null)
             {
-                logs.Add(new SystemLog { AccountId = managerAcc.Id, Action = "Create", Module = "Inventory", Details = "Lập phiếu xuất kho cho nhu yếu phẩm tuần 2.", Created = DateTime.UtcNow.AddDays(-2), IpAddress = "192.168.1.20" });
-                logs.Add(new SystemLog { AccountId = managerAcc.Id, Action = "Assign", Module = "Task", Details = "Phân công nhiệm vụ tổng vệ sinh cho nhân viên.", Created = DateTime.UtcNow.AddDays(-3), IpAddress = "192.168.1.20" });
+                logs.Add(new SystemLog { AccountId = managerAcc.Id, Action = "Create", Module = "Inventory", Details = "Lập phiếu xuất kho cho nhu yếu phẩm tuần 2.", Timestamp = DateTime.UtcNow.AddDays(-2), IpAddress = "192.168.1.20" });
+                logs.Add(new SystemLog { AccountId = managerAcc.Id, Action = "Assign", Module = "Task", Details = "Phân công nhiệm vụ tổng vệ sinh cho nhân viên.", Timestamp = DateTime.UtcNow.AddDays(-3), IpAddress = "192.168.1.20" });
             }
 
             _context.SystemLogs.AddRange(logs);
@@ -1044,9 +1225,9 @@ public class ApplicationDbContextInitialiser
         // ==========================================
         if (!_context.Notifications.Any())
         {
-            var directorAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "director");
-            var managerAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "manager1");
-            var staffAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "staff1");
+            var directorAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "tue2@gmail.com");
+            var managerAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "tue3");
+            var staffAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "tue4");
 
             var notifications = new List<Notification>();
 
@@ -1074,5 +1255,266 @@ public class ApplicationDbContextInitialiser
             _context.Notifications.AddRange(notifications);
             await _context.SaveChangesAsync();
         }
+
+        // ==========================================
+        // 19. TẠO DỰ LIỆU NHIỆM VỤ SINH HOẠT HÀNG NGÀY (DAILY CARE TASKS)
+        // ==========================================
+        if (!_context.DailyCareTasks.Any())
+        {
+            var caregiverTue4 = await _context.Employees.FirstOrDefaultAsync(e => e.FullName == "Nhân Viên Tuệ 4");
+            
+            // Lấy tất cả trẻ em thuộc Khu Mầm Non để gán việc cho Tuệ 4
+            var mamNonChildren = await _context.Children
+                .Include(c => c.Room)
+                .Where(c => c.Room != null && c.Room.Location == "Khu Mầm Non")
+                .ToListAsync();
+
+            if (caregiverTue4 != null && mamNonChildren.Any())
+            {
+                var dailyTasks = new List<DailyCareTask>();
+                var today = DateTime.UtcNow.Date;
+
+                // Load all medical records for the seeded nursery children
+                var childMedicalRecords = await _context.MedicalRecords
+                    .Where(mr => mr.ChildId != null)
+                    .ToListAsync();
+
+                foreach (var child in mamNonChildren)
+                {
+                    // Find active diagnosis (prefer specific illness over general checkup)
+                    var records = childMedicalRecords.Where(r => r.ChildId == child.Id).ToList();
+                    var activeDiagnosis = records
+                        .Where(r => r.Diagnosis != MedicalDiagnoses.GeneralCheckup)
+                        .Select(r => r.Diagnosis)
+                        .FirstOrDefault() ?? MedicalDiagnoses.GeneralCheckup;
+
+                    // Core basic care tasks (common to all nursery kids)
+                    var morningTasksForChild = new List<(string Name, string Type)>
+                    {
+                        ("Cho trẻ ăn sáng (Cháo yến mạch dinh dưỡng)", "BasicCare"),
+                        ("Lau mặt và vệ sinh răng miệng cho trẻ", "BasicCare")
+                    };
+
+                    var noonTasksForChild = new List<(string Name, string Type)>
+                    {
+                        ("Bữa ăn trưa (Súp rau củ thịt băm + Cơm nhão)", "BasicCare"),
+                        ("Cho uống sữa bột công thức", "BasicCare")
+                    };
+
+                    var afternoonTasksForChild = new List<(string Name, string Type)>
+                    {
+                        ("Vận động nhẹ nhàng và tắm nắng chiều", "BasicCare"),
+                        ("Vệ sinh cơ thể, tắm rửa thay đồ sạch", "BasicCare"),
+                        ("Uống sữa chua / Ăn xế bổ sung lợi khuẩn", "BasicCare")
+                    };
+
+                    var nightTasksForChild = new List<(string Name, string Type)>
+                    {
+                        ("Bữa ăn tối (Cháo gà hạt sen)", "BasicCare"),
+                        ("Đọc truyện/Nghe nhạc nhẹ và dỗ trẻ ngủ ngon", "BasicCare")
+                    };
+
+                    // Customize medical care tasks based on active diagnosis
+                    if (activeDiagnosis == MedicalDiagnoses.FeverAndCough)
+                    {
+                        morningTasksForChild.Add(("Cho uống siro ho thảo dược Prospan (2.5ml) sau ăn sáng", "MedicalCare"));
+                        noonTasksForChild.Add(("Đo thân nhiệt và uống thuốc hạ sốt Hapacol 150mg (nếu sốt > 38.5 độ)", "MedicalCare"));
+                        noonTasksForChild.Add(("Cho uống siro ho thảo dược Prospan (2.5ml) sau ăn trưa", "MedicalCare"));
+                        nightTasksForChild.Add(("Cho uống siro ho thảo dược Prospan (2.5ml) trước khi ngủ", "MedicalCare"));
+                    }
+                    else if (activeDiagnosis == MedicalDiagnoses.ProbioticsAndZinc)
+                    {
+                        morningTasksForChild.Add(("Cho uống men vi sinh Enterogermina (1 ống) sau ăn sáng", "MedicalCare"));
+                        morningTasksForChild.Add(("Cho uống Kẽm Biolizin (1ml) sau ăn sáng", "MedicalCare"));
+                        noonTasksForChild.Add(("Đo thân nhiệt và ghi nhận sức khỏe", "MedicalCare"));
+                    }
+                    else if (activeDiagnosis == MedicalDiagnoses.RespiratoryInfection)
+                    {
+                        morningTasksForChild.Add(("Cho uống thuốc kháng sinh theo phác đồ bác sĩ", "MedicalCare"));
+                        noonTasksForChild.Add(("Đo thân nhiệt và ghi nhận sức khỏe", "MedicalCare"));
+                        noonTasksForChild.Add(("Cho uống siro ho thảo dược sau ăn trưa", "MedicalCare"));
+                        nightTasksForChild.Add(("Theo dõi nhiệt độ và cho uống thuốc bổ/kháng sinh trước khi ngủ", "MedicalCare"));
+                    }
+                    else
+                    {
+                        // Healthy child (GeneralCheckup)
+                        morningTasksForChild.Add(("Uống thuốc bổ sung Vitamin D hàng ngày", "MedicalCare"));
+                        noonTasksForChild.Add(("Đo thân nhiệt và ghi nhận sức khỏe", "MedicalCare"));
+                    }
+
+                    // Add Morning tasks
+                    foreach (var t in morningTasksForChild)
+                    {
+                        dailyTasks.Add(new DailyCareTask
+                        {
+                            ChildId = child.Id,
+                            EmployeeId = caregiverTue4.Id,
+                            TaskName = t.Name,
+                            Session = "Sáng",
+                            CareType = t.Type,
+                            IsCompleted = false,
+                            TaskDate = today
+                        });
+                    }
+
+                    // Add Noon tasks
+                    foreach (var t in noonTasksForChild)
+                    {
+                        dailyTasks.Add(new DailyCareTask
+                        {
+                            ChildId = child.Id,
+                            EmployeeId = caregiverTue4.Id,
+                            TaskName = t.Name,
+                            Session = "Trưa",
+                            CareType = t.Type,
+                            IsCompleted = false,
+                            TaskDate = today
+                        });
+                    }
+
+                    // Add Afternoon tasks
+                    foreach (var t in afternoonTasksForChild)
+                    {
+                        dailyTasks.Add(new DailyCareTask
+                        {
+                            ChildId = child.Id,
+                            EmployeeId = caregiverTue4.Id,
+                            TaskName = t.Name,
+                            Session = "Chiều",
+                            CareType = t.Type,
+                            IsCompleted = false,
+                            TaskDate = today
+                        });
+                    }
+
+                    // Add Night tasks
+                    foreach (var t in nightTasksForChild)
+                    {
+                        dailyTasks.Add(new DailyCareTask
+                        {
+                            ChildId = child.Id,
+                            EmployeeId = caregiverTue4.Id,
+                            TaskName = t.Name,
+                            Session = "Tối",
+                            CareType = t.Type,
+                            IsCompleted = false,
+                            TaskDate = today
+                        });
+                    }
+                }
+
+                _context.DailyCareTasks.AddRange(dailyTasks);
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        // ==========================================
+        // 20. TẠO LỊCH TIÊM CHỦNG (VACCINATIONS)
+        // ==========================================
+        if (!_context.Vaccinations.Any())
+        {
+            var mamNonChildren = await _context.Children
+                .Include(c => c.Room)
+                .Where(c => c.Room != null && c.Room.Location == "Khu Mầm Non")
+                .ToListAsync();
+
+            if (mamNonChildren.Any())
+            {
+                var vaccinations = new List<Vaccination>();
+                var today = DateTime.UtcNow.Date;
+
+                // Chọn bé đầu tiên trong mầm non để gán lịch tiêm chủng hôm nay (khớp ca trực)
+                vaccinations.Add(new Vaccination
+                {
+                    ChildId = mamNonChildren[0].Id,
+                    VaccineName = "Lao (BCG) - Tiêm phòng dịch lao",
+                    Dose = "Mũi 1",
+                    VaccinationDate = today.AddHours(9), // 9h sáng hôm nay
+                    Status = "Chờ tiêm"
+                });
+
+                // Chọn bé thứ hai
+                if (mamNonChildren.Count > 1)
+                {
+                    vaccinations.Add(new Vaccination
+                    {
+                        ChildId = mamNonChildren[1].Id,
+                        VaccineName = "Bại liệt (IPV) - Sởi",
+                        Dose = "Mũi 2",
+                        VaccinationDate = today.AddDays(2).AddHours(10), // 2 ngày nữa
+                        Status = "Chờ tiêm"
+                    });
+                }
+
+                // Tiền bối khác
+                if (mamNonChildren.Count > 2)
+                {
+                    vaccinations.Add(new Vaccination
+                    {
+                        ChildId = mamNonChildren[2].Id,
+                        VaccineName = "Sởi - Quai bị - Rubella",
+                        Dose = "Mũi 1",
+                        VaccinationDate = today.AddDays(-3), // Đã tiêm
+                        Status = "Đã tiêm"
+                    });
+                }
+
+                _context.Vaccinations.AddRange(vaccinations);
+                await _context.SaveChangesAsync();
+            }
+        }
+    }
+
+    private List<string> ReadImageLinks(string fileName, List<string> fallbacks)
+    {
+        try
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null)
+            {
+                var picturePath = Path.Combine(dir.FullName, "picture", fileName);
+                if (File.Exists(picturePath))
+                {
+                    var lines = File.ReadAllLines(picturePath)
+                        .Select(l => l.Trim())
+                        .Where(l => !string.IsNullOrEmpty(l) && (l.StartsWith("http://") || l.StartsWith("https://")))
+                        .ToList();
+                    if (lines.Any())
+                    {
+                        return lines;
+                    }
+                }
+                var parentDir = dir.Parent;
+                if (parentDir != null)
+                {
+                    var slnPicturePath = Path.Combine(parentDir.FullName, "picture", fileName);
+                    if (File.Exists(slnPicturePath))
+                    {
+                        var lines = File.ReadAllLines(slnPicturePath)
+                            .Select(l => l.Trim())
+                            .Where(l => !string.IsNullOrEmpty(l) && (l.StartsWith("http://") || l.StartsWith("https://")))
+                            .ToList();
+                        if (lines.Any())
+                        {
+                            return lines;
+                        }
+                    }
+                }
+                dir = dir.Parent;
+            }
+        }
+        catch
+        {
+            // Ignore
+        }
+        return fallbacks;
+    }
+
+    public static class MedicalDiagnoses
+    {
+        public const string GeneralCheckup = "Khám sức khỏe tổng quát ban đầu";
+        public const string FeverAndCough = "Cần uống thuốc hạ sốt và siro ho";
+        public const string ProbioticsAndZinc = "Bổ sung men vi sinh và kẽm";
+        public const string RespiratoryInfection = "Viêm đường hô hấp / Suy dinh dưỡng";
     }
 }

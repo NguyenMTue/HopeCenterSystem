@@ -53,7 +53,7 @@ app.UseFileServer();
 app.MapOpenApi();
 app.MapScalarApiReference();
 
-app.UseExceptionHandler(options => { });
+app.UseExceptionHandler();
 
 
 app.MapDefaultEndpoints();

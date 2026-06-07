@@ -20,3 +20,13 @@ export const deleteChild = async (id: string) => {
     const response = await apiClient.delete(`/api/Children/${id}`);
     return response.data;
 };
+
+export const createChild = async (payload: any) => {
+    const response = await apiClient.post('/api/Children', payload);
+    return response.data;
+};
+
+export const updateChild = async (id: string, payload: any) => {
+    const response = await apiClient.put(`/api/Children/${id}`, payload);
+    return response.data;
+};

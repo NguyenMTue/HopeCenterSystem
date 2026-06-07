@@ -40,10 +40,14 @@ public class ProblemDetailsExceptionHandler : IExceptionHandler
                 Title = "Forbidden",
                 Type = "https://tools.ietf.org/html/rfc9110#section-15.5.4"
             }),
-            _ => (-1, null)
+            _ => (StatusCodes.Status500InternalServerError, new ProblemDetails
+            {
+                Status = StatusCodes.Status500InternalServerError,
+                Title = "An unexpected error occurred on the server.",
+                Detail = exception.Message,
+                Type = "https://tools.ietf.org/html/rfc9110#section-15.5.1"
+            })
         };
-
-        if (problemDetails is null) return false;
 
         httpContext.Response.StatusCode = statusCode;
         await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);

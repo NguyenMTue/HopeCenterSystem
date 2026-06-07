@@ -1,7 +1,9 @@
 using backend.Application.Common.Interfaces;
+using backend.Application.Common.Security;
 
 namespace backend.Application.MedicalRecords.Commands.UpdateMedicalRecord;
 
+[Authorize(Roles = "CareGiver,Director,Manager")]
 public record UpdateMedicalRecordCommand : IRequest
 {
     public Guid Id { get; init; }

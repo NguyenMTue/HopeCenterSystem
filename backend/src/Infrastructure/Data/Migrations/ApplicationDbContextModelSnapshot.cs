@@ -269,6 +269,9 @@ namespace backend.Infrastructure.Data.Migrations
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("DesiredCriteria")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTimeOffset>("LastModified")
                         .HasColumnType("datetimeoffset");
 
@@ -411,6 +414,9 @@ namespace backend.Infrastructure.Data.Migrations
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("EndDate")
                         .HasColumnType("datetime2");
 
@@ -438,7 +444,45 @@ namespace backend.Infrastructure.Data.Migrations
 
                     b.HasIndex("ChildId");
 
+                    b.HasIndex("EmployeeId");
+
                     b.ToTable("CarePlans");
+                });
+
+            modelBuilder.Entity("backend.Domain.Entities.CarePlanSupply", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CarePlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("Created")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("InventoryItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("LastModified")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("LastModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CarePlanId");
+
+                    b.HasIndex("InventoryItemId");
+
+                    b.ToTable("CarePlanSupplies");
                 });
 
             modelBuilder.Entity("backend.Domain.Entities.Child", b =>
@@ -545,6 +589,64 @@ namespace backend.Infrastructure.Data.Migrations
                     b.ToTable("ChildStatusHistories");
                 });
 
+            modelBuilder.Entity("backend.Domain.Entities.DailyCareTask", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CareType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("ChildId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("Created")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset>("LastModified")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("LastModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Session")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("TaskDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("TaskName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChildId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("DailyCareTasks");
+                });
+
             modelBuilder.Entity("backend.Domain.Entities.Donation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -560,15 +662,24 @@ namespace backend.Infrastructure.Data.Migrations
                     b.Property<string>("DonationType")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<Guid?>("DonorId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("DonorName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("InventoryItemId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("LastModified")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<string>("LastModifiedBy")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("Quantity")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("ReceiveDate")
                         .HasColumnType("datetime2");
@@ -584,6 +695,10 @@ namespace backend.Infrastructure.Data.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DonorId");
+
+                    b.HasIndex("InventoryItemId");
 
                     b.ToTable("Donations");
                 });
@@ -632,6 +747,48 @@ namespace backend.Infrastructure.Data.Migrations
                     b.HasIndex("ManagerId");
 
                     b.ToTable("DonationAllocations");
+                });
+
+            modelBuilder.Entity("backend.Domain.Entities.Donor", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Address")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("Created")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("LastModified")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("LastModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Phone")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId")
+                        .IsUnique();
+
+                    b.ToTable("Donors");
                 });
 
             modelBuilder.Entity("backend.Domain.Entities.Employee", b =>
@@ -711,7 +868,13 @@ namespace backend.Infrastructure.Data.Migrations
                     b.Property<Guid?>("ReporterId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("ResolutionNotes")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Severity")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
@@ -777,9 +940,6 @@ namespace backend.Infrastructure.Data.Migrations
                     b.Property<Guid?>("EmployeeId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("InventoryItemId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<Guid?>("ItemId")
                         .HasColumnType("uniqueidentifier");
 
@@ -812,7 +972,7 @@ namespace backend.Infrastructure.Data.Migrations
 
                     b.HasIndex("EmployeeId");
 
-                    b.HasIndex("InventoryItemId");
+                    b.HasIndex("ItemId");
 
                     b.ToTable("InventoryTransactions");
                 });
@@ -1105,6 +1265,52 @@ namespace backend.Infrastructure.Data.Migrations
                     b.ToTable("TaskAssignments");
                 });
 
+            modelBuilder.Entity("backend.Domain.Entities.Vaccination", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ChildId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("Created")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Dose")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset>("LastModified")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("LastModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("VaccinationDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("VaccineName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChildId");
+
+                    b.ToTable("Vaccinations");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.HasOne("backend.Domain.Entities.Role", null)
@@ -1207,7 +1413,8 @@ namespace backend.Infrastructure.Data.Migrations
                 {
                     b.HasOne("backend.Domain.Entities.Employee", "Approver")
                         .WithMany("ApprovedCarePlans")
-                        .HasForeignKey("ApproverId");
+                        .HasForeignKey("ApproverId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("backend.Domain.Entities.Child", "Child")
                         .WithMany("CarePlans")
@@ -1215,9 +1422,35 @@ namespace backend.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("backend.Domain.Entities.Employee", "Employee")
+                        .WithMany("CarePlans")
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Approver");
 
                     b.Navigation("Child");
+
+                    b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("backend.Domain.Entities.CarePlanSupply", b =>
+                {
+                    b.HasOne("backend.Domain.Entities.CarePlan", "CarePlan")
+                        .WithMany("CarePlanSupplies")
+                        .HasForeignKey("CarePlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("backend.Domain.Entities.InventoryItem", "InventoryItem")
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CarePlan");
+
+                    b.Navigation("InventoryItem");
                 });
 
             modelBuilder.Entity("backend.Domain.Entities.Child", b =>
@@ -1246,6 +1479,39 @@ namespace backend.Infrastructure.Data.Migrations
                     b.Navigation("Child");
                 });
 
+            modelBuilder.Entity("backend.Domain.Entities.DailyCareTask", b =>
+                {
+                    b.HasOne("backend.Domain.Entities.Child", "Child")
+                        .WithMany()
+                        .HasForeignKey("ChildId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("backend.Domain.Entities.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Child");
+
+                    b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("backend.Domain.Entities.Donation", b =>
+                {
+                    b.HasOne("backend.Domain.Entities.Donor", "Donor")
+                        .WithMany("Donations")
+                        .HasForeignKey("DonorId");
+
+                    b.HasOne("backend.Domain.Entities.InventoryItem", "InventoryItem")
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId");
+
+                    b.Navigation("Donor");
+
+                    b.Navigation("InventoryItem");
+                });
+
             modelBuilder.Entity("backend.Domain.Entities.DonationAllocation", b =>
                 {
                     b.HasOne("backend.Domain.Entities.Donation", "Donation")
@@ -1259,6 +1525,17 @@ namespace backend.Infrastructure.Data.Migrations
                     b.Navigation("Donation");
 
                     b.Navigation("Manager");
+                });
+
+            modelBuilder.Entity("backend.Domain.Entities.Donor", b =>
+                {
+                    b.HasOne("backend.Domain.Entities.Account", "Account")
+                        .WithOne("Donor")
+                        .HasForeignKey("backend.Domain.Entities.Donor", "AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Account");
                 });
 
             modelBuilder.Entity("backend.Domain.Entities.Employee", b =>
@@ -1295,7 +1572,7 @@ namespace backend.Infrastructure.Data.Migrations
 
                     b.HasOne("backend.Domain.Entities.InventoryItem", "InventoryItem")
                         .WithMany("InventoryTransactions")
-                        .HasForeignKey("InventoryItemId");
+                        .HasForeignKey("ItemId");
 
                     b.Navigation("Employee");
 
@@ -1365,9 +1642,22 @@ namespace backend.Infrastructure.Data.Migrations
                     b.Navigation("Assigner");
                 });
 
+            modelBuilder.Entity("backend.Domain.Entities.Vaccination", b =>
+                {
+                    b.HasOne("backend.Domain.Entities.Child", "Child")
+                        .WithMany()
+                        .HasForeignKey("ChildId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Child");
+                });
+
             modelBuilder.Entity("backend.Domain.Entities.Account", b =>
                 {
                     b.Navigation("Adopter");
+
+                    b.Navigation("Donor");
 
                     b.Navigation("Employee");
 
@@ -1391,6 +1681,8 @@ namespace backend.Infrastructure.Data.Migrations
             modelBuilder.Entity("backend.Domain.Entities.CarePlan", b =>
                 {
                     b.Navigation("CareLogs");
+
+                    b.Navigation("CarePlanSupplies");
                 });
 
             modelBuilder.Entity("backend.Domain.Entities.Child", b =>
@@ -1411,6 +1703,11 @@ namespace backend.Infrastructure.Data.Migrations
                     b.Navigation("DonationAllocations");
                 });
 
+            modelBuilder.Entity("backend.Domain.Entities.Donor", b =>
+                {
+                    b.Navigation("Donations");
+                });
+
             modelBuilder.Entity("backend.Domain.Entities.Employee", b =>
                 {
                     b.Navigation("ApprovedApplications");
@@ -1420,6 +1717,8 @@ namespace backend.Infrastructure.Data.Migrations
                     b.Navigation("AssignedTasks");
 
                     b.Navigation("CareLogs");
+
+                    b.Navigation("CarePlans");
 
                     b.Navigation("ConductedFollowUps");
 

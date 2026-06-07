@@ -16,6 +16,9 @@ public class CarePlan : BaseAuditableEntity
     // Người duyệt (Liên kết với bảng Employee)
     public Guid? ApproverId { get; set; }
     
+    // Nhân viên phụ trách trực ca sinh hoạt / nhiệm vụ
+    public Guid? EmployeeId { get; set; }
+    
     public ApplicationStatus Status { get; set; } = ApplicationStatus.Pending;
 
     [ForeignKey("ChildId")]
@@ -24,5 +27,9 @@ public class CarePlan : BaseAuditableEntity
     [ForeignKey("ApproverId")]
     public virtual Employee? Approver { get; set; }
 
+    [ForeignKey("EmployeeId")]
+    public virtual Employee? Employee { get; set; }
+
     public virtual ICollection<CareLog> CareLogs { get; set; } = new List<CareLog>();
+    public virtual ICollection<CarePlanSupply> CarePlanSupplies { get; set; } = new List<CarePlanSupply>();
 }

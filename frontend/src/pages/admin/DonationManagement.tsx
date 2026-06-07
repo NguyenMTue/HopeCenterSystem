@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Table, Tag, Space, Button, Typography, Card, Input, Modal, Form, Select, InputNumber, message } from 'antd';
-import { SearchOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { SearchOutlined, EyeOutlined, PlusOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-// Đảm bảo bạn đã import đúng đường dẫn service
-import { getDonations } from '../../services/donationService';
+import apiClient from '../../services/apiClient';
+import { getDonations, createDonation, updateDonation } from '../../services/donationService';
 
 const { Title, Text } = Typography;
 
@@ -13,6 +13,7 @@ const DonationManagement: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [form] = Form.useForm();
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   // 1. GỌI API LẤY DỮ LIỆU TỪ SQL SERVER
   const fetchDonations = async () => {
@@ -26,8 +27,8 @@ const DonationManagement: React.FC = () => {
         donor: item.donorName,
         type: item.donationType,
         amount: item.totalAmount,
-        date: item.receiveDate ? dayjs(item.receiveDate).format('DD/MM/YYYY') : 'N/A',
-        status: item.status || 'Đã nhận'
+        date: item.receiveDate ? dayjs(item.receiveDate).format('DD/MM/YYYY HH:mm') : 'N/A',
+        status: item.status || 'Chờ phê duyệt'
       }));
       setData(formattedData);
     } catch (error) {
@@ -39,39 +40,81 @@ const DonationManagement: React.FC = () => {
   };
 
   useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await apiClient.get('/api/Users/me');
+        setCurrentUser(res.data);
+      } catch (e) {
+        console.error('Lỗi khi lấy thông tin user:', e);
+      }
+    };
+    fetchUser();
     fetchDonations();
   }, []);
+
+  const userRoles = useMemo(() => currentUser?.roles || [], [currentUser]);
+  const canApprove = useMemo(() => 
+    userRoles.includes('Manager') || 
+    userRoles.includes('Director') || 
+    userRoles.includes('Administrator'), 
+    [userRoles]
+  );
 
   // 2. LOGIC TÌM KIẾM
   const filteredData = useMemo(() => {
     return data.filter(item => 
       item.donor?.toLowerCase().includes(searchText.toLowerCase()) ||
-      item.type?.toLowerCase().includes(searchText.toLowerCase())
+      (item.type === 0 || item.type === 'Cash' ? 'tiền mặt' : 'vật phẩm').includes(searchText.toLowerCase())
     );
   }, [data, searchText]);
 
-  // 3. XỬ LÝ THÊM MỚI (TẠM THỜI LOCAL, BẠN CÓ THỂ NỐI POST SAU)
+  // 3. XỬ LÝ THÊM MỚI
   const handleAdd = async (values: any) => {
-    message.success('Ghi nhận tài trợ thành công!');
-    setIsModalOpen(false);
-    form.resetFields();
-    // Sau này nối API POST xong thì gọi fetchDonations() ở đây
+    setLoading(true);
+    try {
+      await createDonation({
+        donorName: values.donor,
+        donationType: values.type === 'Tiền mặt' ? 0 : 1,
+        totalAmount: values.amount || 0
+      });
+      message.success('Ghi nhận tài trợ thành công!');
+      setIsModalOpen(false);
+      form.resetFields();
+      fetchDonations();
+    } catch (error) {
+      console.error(error);
+      message.error('Ghi nhận tài trợ thất bại!');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // 4. CẤU HÌNH CỘT BẢNG
+  // 4. XỬ LÝ PHÊ DUYỆT TÀI TRỢ
+  const handleApprove = async (record: any) => {
+    try {
+      message.loading({ content: 'Đang phê duyệt khoản tài trợ...', key: 'approve' });
+      await updateDonation(record.id, { id: record.id, status: 'Đã tiếp nhận' });
+      message.success({ content: 'Đã phê duyệt khoản tài trợ thành công!', key: 'approve' });
+      fetchDonations();
+    } catch (error) {
+      console.error(error);
+      message.error({ content: 'Phê duyệt tài trợ thất bại!', key: 'approve' });
+    }
+  };
+
+  // 5. CẤU HÌNH CỘT BẢNG
   const columns = [
     { 
       title: 'Nhà tài trợ', 
       dataIndex: 'donor', 
       key: 'donor', 
-      render: (text: string) => <Text strong style={{ fontSize: 15 }}>{text}</Text> 
+      render: (text: string) => <Text strong style={{ fontSize: 14 }}>{text}</Text> 
     },
     { 
       title: 'Hình thức', 
       dataIndex: 'type', 
       key: 'type',
       render: (type: any) => {
-        // Map backend enum (0: Cash, 1: Item) to display text
         let displayType = 'N/A';
         if (type === 0 || type === 'Cash') displayType = 'Tiền mặt';
         else if (type === 1 || type === 'Item') displayType = 'Vật phẩm';
@@ -89,41 +132,73 @@ const DonationManagement: React.FC = () => {
       title: 'Giá trị tài trợ', 
       dataIndex: 'amount', 
       key: 'amount',
-      render: (amount: number) => amount > 0 ? (
-        <Text style={{ color: '#f43f5e', fontWeight: 700 }}>
-          {amount.toLocaleString()} đ
-        </Text>
-      ) : (
-        <Tag color="default">VẬT PHẨM</Tag>
-      )
+      render: (amount: number, record: any) => {
+        const isCash = record.type === 0 || record.type === 'Cash';
+        return isCash && amount > 0 ? (
+          <Text style={{ color: '#f43f5e', fontWeight: 700 }}>
+            {amount.toLocaleString()} đ
+          </Text>
+        ) : (
+          <Tag color="purple">VẬT PHẨM</Tag>
+        );
+      }
     },
-    { title: 'Ngày đóng góp', dataIndex: 'date', key: 'date' },
+    { 
+      title: 'Ngày đóng góp', 
+      dataIndex: 'date', 
+      key: 'date' 
+    },
+    { 
+      title: 'Trạng thái', 
+      dataIndex: 'status', 
+      key: 'status',
+      render: (status: string) => {
+        let color = 'blue';
+        if (status === 'Chờ phê duyệt') color = 'orange';
+        else if (status === 'Đã tiếp nhận') color = 'green';
+        else if (status?.startsWith('Đã phân bổ')) color = 'cyan';
+        else if (status === 'Đã hoàn tất') color = 'success';
+        return <Tag color={color} style={{ fontWeight: 600 }}>{status}</Tag>;
+      }
+    },
     {
       title: 'Thao tác',
       key: 'action',
-      width: 120,
+      width: 220,
       render: (_: any, record: any) => (
-        <Button 
-          type="primary" 
-          ghost 
-          icon={<EyeOutlined />} 
-          onClick={() => {
-            Modal.info({
-              title: 'Chi tiết khoản đóng góp',
-              content: (
-                <div style={{ marginTop: 20 }}>
-                  <p><b>Nhà tài trợ:</b> {record.donor}</p>
-                  <p><b>Hình thức:</b> {record.type}</p>
-                  <p><b>Trạng thái hệ thống:</b> {record.status}</p>
-                  <p><b>Ngày ghi nhận:</b> {record.date}</p>
-                </div>
-              ),
-              centered: true
-            });
-          }}
-        >
-          Chi tiết
-        </Button>
+        <Space size="middle">
+          <Button 
+            type="primary" 
+            ghost 
+            icon={<EyeOutlined />} 
+            onClick={() => {
+              Modal.info({
+                title: 'Chi tiết khoản đóng góp',
+                content: (
+                  <div style={{ marginTop: 20 }}>
+                    <p><b>Nhà tài trợ:</b> {record.donor}</p>
+                    <p><b>Hình thức:</b> {record.type === 0 || record.type === 'Cash' ? 'Tiền mặt' : 'Vật phẩm'}</p>
+                    <p><b>Trạng thái hệ thống:</b> {record.status}</p>
+                    <p><b>Ngày ghi nhận:</b> {record.date}</p>
+                  </div>
+                ),
+                centered: true
+              });
+            }}
+          >
+            Chi tiết
+          </Button>
+          {canApprove && record.status === 'Chờ phê duyệt' && (
+            <Button
+              type="primary"
+              style={{ background: '#10b981', borderColor: '#10b981' }}
+              icon={<CheckCircleOutlined />}
+              onClick={() => handleApprove(record)}
+            >
+              Duyệt
+            </Button>
+          )}
+        </Space>
       ),
     },
   ];
@@ -186,7 +261,6 @@ const DonationManagement: React.FC = () => {
               min={0}
               placeholder="Nhập số tiền..."
               formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} 
-              // Sửa lỗi parser as any để TypeScript không báo đỏ
               parser={(value) => value!.replace(/\$\s?|(,*)/g, '') as any}
             />
           </Form.Item>

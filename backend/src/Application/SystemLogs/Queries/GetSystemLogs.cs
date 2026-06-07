@@ -4,17 +4,14 @@ namespace backend.Application.SystemLogs.Queries.GetSystemLogs;
 
 public record GetSystemLogsQuery : IRequest<SystemLogsVm>;
 
-public class GetSystemLogsQueryHandler(IApplicationDbContext context, IMapper mapper) : IRequestHandler<GetSystemLogsQuery, SystemLogsVm>
+public class GetSystemLogsQueryHandler(ISystemLogService logService) : IRequestHandler<GetSystemLogsQuery, SystemLogsVm>
 {
     public async Task<SystemLogsVm> Handle(GetSystemLogsQuery request, CancellationToken cancellationToken)
     {
+        var logs = await logService.GetLogsAsync();
         return new SystemLogsVm
         {
-            Lists = await context.SystemLogs
-                .AsNoTracking()
-                .ProjectTo<SystemLogDto>(mapper.ConfigurationProvider)
-                .OrderByDescending(t => t.Timestamp)
-                .ToListAsync(cancellationToken)
+            Lists = logs
         };
     }
 }

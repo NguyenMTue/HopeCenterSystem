@@ -14,6 +14,7 @@ public class GetUsersQueryHandler(
         var users = await userManager.Users
             .Include(u => u.Employee)
             .Include(u => u.Adopter)
+            .Include(u => u.Donor)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
@@ -30,11 +31,17 @@ public class GetUsersQueryHandler(
                 Email = user.Email,
                 IsActive = user.IsActive,
                 Roles = roles.ToList(),
-                FullName = user.Employee?.FullName ?? user.Adopter?.FullName,
+                FullName = user.Employee?.FullName ?? user.Adopter?.FullName ?? user.Donor?.FullName,
                 Position = user.Employee?.Position,
-                Phone = user.Employee?.Phone,
-                Address = user.Adopter?.Address,
-                UserType = user.Employee != null ? "Employee" : (user.Adopter != null ? "Adopter" : "AccountOnly")
+                Phone = user.Employee?.Phone ?? user.Donor?.Phone,
+                Address = user.Adopter?.Address ?? user.Donor?.Address,
+                UserType = user.Employee != null ? "Employee" : (user.Adopter != null ? "Adopter" : (user.Donor != null ? "Donor" : "AccountOnly")),
+                EmployeeId = user.Employee?.Id,
+                AdopterId = user.Adopter?.Id,
+                DonorId = user.Donor?.Id,
+                IDCard = user.Adopter?.IDCard,
+                FinancialStatus = user.Adopter?.FinancialStatus,
+                MaritalStatus = user.Adopter?.MaritalStatus
             });
         }
 
@@ -54,4 +61,10 @@ public class UserDto
     public string? Phone { get; init; }
     public string? Address { get; init; }
     public string UserType { get; init; } = null!;
+    public Guid? EmployeeId { get; init; }
+    public Guid? AdopterId { get; init; }
+    public Guid? DonorId { get; init; }
+    public string? IDCard { get; init; }
+    public string? FinancialStatus { get; init; }
+    public string? MaritalStatus { get; init; }
 }

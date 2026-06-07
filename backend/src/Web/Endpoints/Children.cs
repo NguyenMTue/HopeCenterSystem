@@ -9,7 +9,9 @@ public class Children : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
-        groupBuilder.RequireAuthorization();
+        groupBuilder.RequireAuthorization(policy => 
+            policy.RequireAssertion(context => 
+                !context.User.IsInRole("Administrator")));
         groupBuilder.MapGet(GetChildren);
         groupBuilder.MapGet(GetChildById, "{id}");
         groupBuilder.MapPost(CreateChild);

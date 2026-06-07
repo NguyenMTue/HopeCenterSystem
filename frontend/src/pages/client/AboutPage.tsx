@@ -28,7 +28,7 @@ const AboutPage: React.FC = () => {
       <Row gutter={[40, 40]} style={{ marginBottom: '60px' }}>
         <Col xs={24} md={12}>
           <Card 
-            variant="none" 
+            variant="borderless" 
             style={{ 
               padding: '20px', 
               borderRadius: '16px', 
@@ -47,7 +47,7 @@ const AboutPage: React.FC = () => {
         </Col>
         <Col xs={24} md={12}>
           <Card 
-            variant="none" 
+            variant="borderless" 
             style={{ 
               padding: '20px', 
               borderRadius: '16px', 

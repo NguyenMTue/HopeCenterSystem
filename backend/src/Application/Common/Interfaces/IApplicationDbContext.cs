@@ -10,9 +10,11 @@ public interface IApplicationDbContext
     DbSet<Room> Rooms { get; }
     DbSet<Employee> Employees { get; }
     DbSet<Adopter> Adopters { get; }
+    DbSet<Donor> Donors { get; }
     DbSet<Child> Children { get; }
     DbSet<MedicalRecord> MedicalRecords { get; }
     DbSet<CarePlan> CarePlans { get; }
+    DbSet<CarePlanSupply> CarePlanSupplies { get; }
     DbSet<CareLog> CareLogs { get; }
     DbSet<Incident> Incidents { get; }
     DbSet<TaskAssignment> TaskAssignments { get; }
@@ -24,6 +26,9 @@ public interface IApplicationDbContext
     DbSet<DonationAllocation> DonationAllocations { get; }
     DbSet<PostAdoptionFollowUp> PostAdoptionFollowUps { get; }
     DbSet<ChildStatusHistory> ChildStatusHistories { get; }
+    DbSet<DailyCareTask> DailyCareTasks { get; }
+    DbSet<Vaccination> Vaccinations { get; }
 
+    Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade Database { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }
