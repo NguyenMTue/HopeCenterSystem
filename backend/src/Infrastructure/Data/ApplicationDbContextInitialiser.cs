@@ -50,7 +50,27 @@ public class ApplicationDbContextInitialiser
 
                     using (var conn = new SqlConnection(masterConnStr))
                     {
-                        await conn.OpenAsync();
+                        // Thêm cơ chế thử lại (Retry) để xử lý trường hợp SQL Server Container vừa khởi động
+                        // nhưng chưa hoàn thành việc thiết lập mật khẩu sa (race condition của Aspire)
+                        int maxRetries = 10;
+                        int delayMs = 2000;
+                        for (int retry = 1; retry <= maxRetries; retry++)
+                        {
+                            try
+                            {
+                                await conn.OpenAsync();
+                                break; // Thành công!
+                            }
+                            catch (SqlException ex)
+                            {
+                                if (retry == maxRetries)
+                                {
+                                    throw; // Ném lỗi nếu đã hết số lần thử lại
+                                }
+                                _logger.LogWarning(ex, "Thử kết nối đến SQL Server thất bại (Lần {Retry}/{MaxRetries}). Đang thử lại sau {Delay}ms...", retry, maxRetries, delayMs);
+                                await Task.Delay(delayMs);
+                            }
+                        }
 
                         // 1. Kiểm tra database tồn tại
                         var checkDbSql = "SELECT database_id FROM sys.databases WHERE name = @DbName";

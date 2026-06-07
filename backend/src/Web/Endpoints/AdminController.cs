@@ -312,20 +312,37 @@ public class AdminController : IEndpointGroup
             var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connStr);
             var databaseName = builder.InitialCatalog;
 
-            var backupDir = Path.Combine(Directory.GetCurrentDirectory(), "backups");
-            if (!Directory.Exists(backupDir))
+            // Truy vấn đường dẫn vật lý thực tế của file .mdf từ hệ quản trị CSDL SQL Server
+            // Điều này đảm bảo đường dẫn backup luôn nằm trong filesystem mà SQL Server có quyền truy cập
+            // (kể cả khi SQL Server chạy trong Docker Container Linux còn Web chạy trên Host Windows)
+            string? dbFile = null;
+            try
             {
-                Directory.CreateDirectory(backupDir);
+                dbFile = await context.Database
+                    .SqlQueryRaw<string>("SELECT physical_name AS Value FROM sys.database_files WHERE file_id = 1")
+                    .FirstOrDefaultAsync(cancellationToken: default);
             }
-            var backupPath = Path.Combine(backupDir, $"{databaseName}.bak");
+            catch
+            {
+                dbFile = await context.Database
+                    .SqlQueryRaw<string>("SELECT TOP 1 physical_name AS Value FROM sys.master_files WHERE database_id = DB_ID() AND file_id = 1")
+                    .FirstOrDefaultAsync(cancellationToken: default);
+            }
 
-            // Execute SQL backup
-#pragma warning disable EF1003
-            await context.Database.ExecuteSqlRawAsync(
-                "BACKUP DATABASE [" + databaseName + "] TO DISK = {0} WITH FORMAT, INIT, NAME = {1}", 
-                new object[] { backupPath, $"Backup of {databaseName} at {DateTime.UtcNow}" },
-                cancellationToken: default);
-#pragma warning restore EF1003
+            if (string.IsNullOrEmpty(dbFile))
+            {
+                return TypedResults.BadRequest(new { message = "Không thể xác định đường dẫn lưu trữ của cơ sở dữ liệu." });
+            }
+
+            // Thay đổi đuôi file .mdf thành .bak để lưu file sao lưu vào cùng thư mục với dữ liệu gốc của DB
+            var backupPath = Path.ChangeExtension(dbFile, ".bak");
+
+            // Execute SQL backup using string interpolation since SQL Server BACKUP TO DISK does not support parameterized path variables
+            var backupName = $"Backup of {databaseName} at {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}";
+            var sql = $"BACKUP DATABASE [{databaseName}] TO DISK = '{backupPath.Replace("'", "''")}' WITH FORMAT, INIT, NAME = '{backupName.Replace("'", "''")}'";
+#pragma warning disable EF1002
+            await context.Database.ExecuteSqlRawAsync(sql, cancellationToken: default);
+#pragma warning restore EF1002
 
             if (!string.IsNullOrEmpty(currentUser.Id) && Guid.TryParse(currentUser.Id, out Guid adminId))
             {
@@ -351,17 +368,29 @@ public class AdminController : IEndpointGroup
             var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connStr);
             var databaseName = builder.InitialCatalog;
 
-            var backupDir = Path.Combine(Directory.GetCurrentDirectory(), "backups");
-            var backupPath = Path.Combine(backupDir, $"{databaseName}.bak");
-
-            if (!File.Exists(backupPath))
-            {
-                return TypedResults.BadRequest(new { message = "Không tìm thấy file sao lưu để phục hồi!" });
-            }
-
             // Connect to master database to drop connections and restore
             builder.InitialCatalog = "master";
             var masterConnStr = builder.ConnectionString;
+
+            string? dbFile = null;
+            using (var conn = new Microsoft.Data.SqlClient.SqlConnection(masterConnStr))
+            {
+                await conn.OpenAsync();
+                var getPathSql = "SELECT physical_name FROM sys.master_files WHERE database_id = DB_ID(@DbName) AND file_id = 1";
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(getPathSql, conn))
+                {
+                    cmd.Parameters.AddWithValue("@DbName", databaseName);
+                    var result = await cmd.ExecuteScalarAsync();
+                    dbFile = result?.ToString();
+                }
+            }
+
+            if (string.IsNullOrEmpty(dbFile))
+            {
+                return TypedResults.BadRequest(new { message = "Không thể xác định đường dẫn file sao lưu để phục hồi." });
+            }
+
+            var backupPath = Path.ChangeExtension(dbFile, ".bak");
 
             using (var conn = new Microsoft.Data.SqlClient.SqlConnection(masterConnStr))
             {
@@ -374,11 +403,10 @@ public class AdminController : IEndpointGroup
                     await cmd.ExecuteNonQueryAsync();
                 }
 
-                // Restore database
-                var restoreSql = $"RESTORE DATABASE [{databaseName}] FROM DISK = @BackupPath WITH REPLACE;";
+                // Restore database using string interpolation since SQL Server RESTORE FROM DISK does not support parameterized path variables
+                var restoreSql = $"RESTORE DATABASE [{databaseName}] FROM DISK = '{backupPath.Replace("'", "''")}' WITH REPLACE;";
                 using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(restoreSql, conn))
                 {
-                    cmd.Parameters.AddWithValue("@BackupPath", backupPath);
                     await cmd.ExecuteNonQueryAsync();
                 }
 
@@ -388,6 +416,9 @@ public class AdminController : IEndpointGroup
                 {
                     await cmd.ExecuteNonQueryAsync();
                 }
+
+                // Clear all connection pools to force EF Core to open fresh connections instead of using severed ones
+                Microsoft.Data.SqlClient.SqlConnection.ClearAllPools();
             }
 
             if (!string.IsNullOrEmpty(currentUser.Id) && Guid.TryParse(currentUser.Id, out Guid adminId))
@@ -399,7 +430,28 @@ public class AdminController : IEndpointGroup
         }
         catch (Exception ex)
         {
-            return TypedResults.BadRequest(new { message = $"Phục hồi dữ liệu thất bại: {ex.Message}" });
+            // Trong trường hợp lỗi xảy ra, cố gắng đảm bảo database được đưa về chế độ MULTI_USER
+            try
+            {
+                var connStr = context.Database.GetConnectionString();
+                var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connStr);
+                var databaseName = builder.InitialCatalog;
+                builder.InitialCatalog = "master";
+                using (var conn = new Microsoft.Data.SqlClient.SqlConnection(builder.ConnectionString))
+                {
+                    await conn.OpenAsync();
+                    var setMultiUserSql = $"ALTER DATABASE [{databaseName}] SET MULTI_USER;";
+                    using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(setMultiUserSql, conn))
+                    {
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+                    // Clear all connection pools to force EF Core to open fresh connections instead of using severed ones
+                    Microsoft.Data.SqlClient.SqlConnection.ClearAllPools();
+                }
+            }
+            catch { /* Bỏ qua nếu không thể đặt lại */ }
+
+            return TypedResults.Ok(new { message = $"Phục hồi dữ liệu thất bại: {ex.Message}" });
         }
     }
 

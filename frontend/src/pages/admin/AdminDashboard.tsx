@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, Button, Table, Typography, Space, Tabs, Input, Tag, Switch, Modal, Form, Select, Row, Col, Progress, message, Tooltip } from 'antd';
+import { Card, Button, Table, Typography, Space, Tabs, Input, Tag, Switch, Modal, Form, Select, Row, Col, Progress, message, Tooltip, Spin } from 'antd';
 import { 
   UserOutlined, 
   SafetyOutlined, 
@@ -465,6 +465,18 @@ const AdminDashboard: React.FC = () => {
       </Row>
     </div>
   );
+
+  if (isRestoring) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '60vh', gap: 16, textAlign: 'center', padding: 24 }}>
+        <Spin size="large" />
+        <Title level={3} style={{ color: '#ef4444', margin: 0 }}>Đang phục hồi cơ sở dữ liệu...</Title>
+        <Text style={{ fontSize: 16, maxWidth: 500 }}>
+          Hệ thống đang ngắt các kết nối, chạy tiến trình khôi phục và đưa cơ sở dữ liệu hoạt động trở lại. Vui lòng đợi trong giây lát...
+        </Text>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '0 10px' }}>
