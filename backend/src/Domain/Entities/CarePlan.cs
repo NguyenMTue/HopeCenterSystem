@@ -31,4 +31,5 @@ public class CarePlan : BaseAuditableEntity
     public virtual Employee? Employee { get; set; }
 
     public virtual ICollection<CareLog> CareLogs { get; set; } = new List<CareLog>();
+    public virtual ICollection<CarePlanSupply> CarePlanSupplies { get; set; } = new List<CarePlanSupply>();
 }

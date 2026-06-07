@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using backend.Domain.Entities;
 using backend.Application.Users.Queries.GetUsers;
 using backend.Application.Users.Commands.RegisterUser;
+using Microsoft.EntityFrameworkCore;
 
 namespace backend.Web.Endpoints;
 
@@ -44,12 +45,23 @@ public class Users : IEndpointGroup
         // Custom Login endpoint supporting both email and username
         groupBuilder.MapPost(LoginCustom, "login-custom")
             .WithName("LoginCustom");
+
+        // Custom endpoint to complete adopter profile anonymously
+        groupBuilder.MapPost(CompleteProfile, "complete-profile")
+            .WithName("CompleteProfile");
     }
 
-    public static async Task<Created<Guid>> RegisterUser(ISender sender, RegisterUserCommand command)
+    public static async Task<IResult> RegisterUser(ISender sender, RegisterUserCommand command)
     {
-        var id = await sender.Send(command);
-        return TypedResults.Created($"/api/Users/{id}", id);
+        try
+        {
+            var id = await sender.Send(command);
+            return TypedResults.Created($"/api/Users/{id}", id);
+        }
+        catch (Exception ex)
+        {
+            return TypedResults.BadRequest(ex.Message);
+        }
     }
 
     // Đổi ApplicationUser thành Account
@@ -107,7 +119,8 @@ public class Users : IEndpointGroup
         [FromQuery] bool? useCookies,
         [FromQuery] bool? useSessionCookies,
         UserManager<Account> userManager,
-        SignInManager<Account> signInManager)
+        SignInManager<Account> signInManager,
+        IApplicationDbContext context)
     {
         var user = await userManager.FindByNameAsync(request.Email) 
                    ?? await userManager.FindByEmailAsync(request.Email);
@@ -115,6 +128,27 @@ public class Users : IEndpointGroup
         if (user == null)
         {
             return TypedResults.Unauthorized();
+        }
+
+        var checkPassword = await userManager.CheckPasswordAsync(user, request.Password);
+        if (!checkPassword)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        // Check if user is an Adopter, and if so, check if their profile is completed
+        var roles = await userManager.GetRolesAsync(user);
+        if (roles.Contains(backend.Domain.Constants.Roles.Adopter))
+        {
+            var adopter = await context.Adopters.FirstOrDefaultAsync(a => a.AccountId == user.Id);
+            if (adopter == null || adopter.IDCard == "Chưa cập nhật" || string.IsNullOrWhiteSpace(adopter.Address) || string.IsNullOrWhiteSpace(adopter.MaritalStatus))
+            {
+                return TypedResults.BadRequest(new { 
+                    status = "IncompleteProfile", 
+                    accountId = user.Id, 
+                    detail = "Vui lòng hoàn thành thông tin cá nhân trước khi đăng nhập." 
+                });
+            }
         }
 
         var useCookie = useCookies == true || useSessionCookies == true;
@@ -136,9 +170,50 @@ public class Users : IEndpointGroup
         return TypedResults.SignIn(principal, authenticationScheme: IdentityConstants.BearerScheme);
     }
 
+    public static async Task<IResult> CompleteProfile(
+        [FromBody] CompleteProfileRequest request,
+        IApplicationDbContext context)
+    {
+        var adopter = await context.Adopters
+            .Include(a => a.Account)
+            .FirstOrDefaultAsync(a => a.AccountId == request.AccountId);
+            
+        if (adopter == null)
+        {
+            return TypedResults.BadRequest("Không tìm thấy hồ sơ người nhận nuôi tương ứng.");
+        }
+
+        adopter.FullName = request.FullName;
+        adopter.IDCard = request.IdCard;
+        adopter.MaritalStatus = request.MaritalStatus;
+        adopter.Address = request.Address;
+        adopter.FinancialStatus = $"Thu nhập: {request.IncomeScope} | Nghề nghiệp: {request.Occupation}";
+
+        if (adopter.Account != null)
+        {
+            adopter.Account.PhoneNumber = request.Phone;
+        }
+
+        await context.SaveChangesAsync(default);
+
+        return TypedResults.Ok(new { message = "Cập nhật hồ sơ cá nhân thành công!" });
+    }
+
     public class LoginRequest
     {
         public string Email { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
+    }
+
+    public class CompleteProfileRequest
+    {
+        public Guid AccountId { get; set; }
+        public string FullName { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string IdCard { get; set; } = string.Empty;
+        public string MaritalStatus { get; set; } = string.Empty;
+        public string Address { get; set; } = string.Empty;
+        public string Occupation { get; set; } = string.Empty;
+        public string IncomeScope { get; set; } = string.Empty;
     }
 }

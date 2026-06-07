@@ -38,18 +38,8 @@ public class RegisterUserCommandHandler(
             throw new Exception(string.Join(", ", result.Errors.Select(e => e.Description)));
         }
 
-        // Xử lý Role
-        var rolesToAssign = new List<string>();
-        
-        // Mặc định là Adopter cho đăng ký từ bên ngoài
-        if (request.Roles != null && request.Roles.Any())
-        {
-            rolesToAssign = request.Roles;
-        }
-        else
-        {
-            rolesToAssign.Add(backend.Domain.Constants.Roles.Adopter);
-        }
+        // Xử lý Role - Chỉ cho phép đăng ký vai trò Adopter từ bên ngoài
+        var rolesToAssign = new List<string> { backend.Domain.Constants.Roles.Adopter };
 
         foreach (var role in rolesToAssign)
         {

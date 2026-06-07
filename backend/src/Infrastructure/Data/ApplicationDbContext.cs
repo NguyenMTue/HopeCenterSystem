@@ -20,6 +20,7 @@ public class ApplicationDbContext : IdentityDbContext<Account, Role, Guid>, IApp
     public DbSet<Child> Children => Set<Child>();
     public DbSet<MedicalRecord> MedicalRecords => Set<MedicalRecord>();
     public DbSet<CarePlan> CarePlans => Set<CarePlan>();
+    public DbSet<CarePlanSupply> CarePlanSupplies => Set<CarePlanSupply>();
     public DbSet<CareLog> CareLogs => Set<CareLog>();
     public DbSet<Incident> Incidents => Set<Incident>();
     public DbSet<TaskAssignment> TaskAssignments => Set<TaskAssignment>();

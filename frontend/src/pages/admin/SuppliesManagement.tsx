@@ -1,17 +1,22 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Table, Tag, Button, Typography, Card, Space, Input, Modal, Form, Select, InputNumber, message, Progress, Popconfirm, Timeline } from 'antd';
-import { BoxPlotOutlined, PlusOutlined, SearchOutlined, EditOutlined, HistoryOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Table, Tag, Button, Typography, Card, Space, Input, Modal, Form, Select, InputNumber, message, Progress, Popconfirm, Timeline, Tabs } from 'antd';
+import { BoxPlotOutlined, PlusOutlined, SearchOutlined, EditOutlined, HistoryOutlined, DeleteOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-// Giả định bạn đã tạo file service này
+import apiClient from '../../services/apiClient';
 import { getInventoryList, deleteInventoryItem, updateInventoryItem, createInventoryItem } from '../../services/inventoryService';
 
 const { Title, Text } = Typography;
 
 const SuppliesManagement: React.FC = () => {
-  // 1. QUẢN LÝ STATE
+  // 1. STATE MANAGEMENT
+  const [activeTab, setActiveTab] = useState('inventory');
   const [data, setData] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  
+  // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -19,14 +24,12 @@ const SuppliesManagement: React.FC = () => {
 
   const [form] = Form.useForm();
 
-  // 2. LẤY DỮ LIỆU TỪ BACKEND
+  // 2. FETCH DATA FROM BACKEND
   const fetchInventory = async () => {
     setLoading(true);
     try {
       const resData = await getInventoryList();
-      // Backend trả về InventoryItemsVm với property Lists
       const res = resData.lists || [];
-      // Map dữ liệu từ SQL (ItemName, CurrentQuantity...) sang định dạng Frontend
       const formattedData = res.map((item: any) => ({
         id: item.id,
         name: item.itemName,
@@ -44,19 +47,35 @@ const SuppliesManagement: React.FC = () => {
     }
   };
 
+  const fetchTransactions = async () => {
+    try {
+      const res = await apiClient.get('/api/InventoryTransactions');
+      setTransactions(res.data.lists || []);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const fetchCurrentUser = async () => {
+    try {
+      const res = await apiClient.get('/api/Users/me');
+      setCurrentUser(res.data);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   useEffect(() => {
     fetchInventory();
+    fetchTransactions();
+    fetchCurrentUser();
   }, []);
 
-  // 3. XỬ LÝ TÌM KIẾM
-  const filteredData = useMemo(() => {
-    return data.filter(item => 
-      item.name?.toLowerCase().includes(searchText.toLowerCase()) ||
-      item.category?.toLowerCase().includes(searchText.toLowerCase())
-    );
-  }, [data, searchText]);
+  const userRoles = currentUser?.roles || [];
+  const isManagerOnly = userRoles.includes('Manager') && !userRoles.includes('Director');
+  const isDirectorOrAdmin = userRoles.includes('Director') || userRoles.includes('Administrator');
 
-  // 4. XỬ LÝ XÓA
+  // 3. ACTION HANDLERS
   const handleDelete = async (id: string) => {
     try {
       await deleteInventoryItem(id);
@@ -92,7 +111,35 @@ const SuppliesManagement: React.FC = () => {
     }
   };
 
-  // 5. CẤU HÌNH CỘT BẢNG
+  const handleProcessRequest = async (transactionId: string, approved: boolean) => {
+    try {
+      await apiClient.put(`/api/InventoryTransactions/${transactionId}`, {
+        id: transactionId,
+        approved
+      });
+      message.success(approved ? 'Đã duyệt yêu cầu cấp phát!' : 'Đã từ chối yêu cầu cấp phát!');
+      fetchTransactions();
+      fetchInventory(); // Inventory quantities will update upon approval
+    } catch (error: any) {
+      console.error(error);
+      const errMsg = error.response?.data?.detail || 'Không thể xử lý yêu cầu cấp phát!';
+      message.error(errMsg);
+    }
+  };
+
+  // 4. DATA FILTERING
+  const filteredData = useMemo(() => {
+    return data.filter(item => 
+      item.name?.toLowerCase().includes(searchText.toLowerCase()) ||
+      item.category?.toLowerCase().includes(searchText.toLowerCase())
+    );
+  }, [data, searchText]);
+
+  const pendingRequests = useMemo(() => {
+    return transactions.filter(t => t.notes && t.notes.includes('[ĐANG CHỜ DUYỆT]'));
+  }, [transactions]);
+
+  // 5. COLUMNS CONFIG
   const columns = [
     { 
       title: 'Tên vật tư', 
@@ -146,39 +193,147 @@ const SuppliesManagement: React.FC = () => {
           <Button icon={<HistoryOutlined />} onClick={() => { setHistoryItem(record); setIsHistoryOpen(true); }}>
             Lịch sử
           </Button>
-          <Button icon={<EditOutlined />} type="text" onClick={() => { setEditingItem(record); form.setFieldsValue(record); setIsModalOpen(true); }} style={{ color: '#3b82f6' }} />
-          <Popconfirm title="Xóa vật tư này?" onConfirm={() => handleDelete(record.id)}>
-            <Button icon={<DeleteOutlined />} type="text" danger />
-          </Popconfirm>
+          {isDirectorOrAdmin && (
+            <>
+              <Button icon={<EditOutlined />} type="text" onClick={() => { setEditingItem(record); form.setFieldsValue(record); setIsModalOpen(true); }} style={{ color: '#3b82f6' }} />
+              <Popconfirm title="Xóa vật tư này?" onConfirm={() => handleDelete(record.id)}>
+                <Button icon={<DeleteOutlined />} type="text" danger />
+              </Popconfirm>
+            </>
+          )}
         </Space>
       )
     }
   ];
 
+  // Render transactions history timeline in history modal
+  const renderHistoryTimeline = () => {
+    if (!historyItem) return null;
+    const itemLogs = transactions.filter(t => t.itemId === historyItem.id);
+    if (itemLogs.length === 0) {
+      return <Text type="secondary">Chưa có lịch sử giao dịch nào.</Text>;
+    }
+
+    return (
+      <Timeline
+        items={itemLogs.map((log: any) => {
+          const isImport = log.type === 1 || log.type === 'Import';
+          const isPending = log.notes && log.notes.includes('[ĐANG CHỜ DUYỆT]');
+          const isRejected = log.notes && log.notes.includes('[ĐẠ TỪ CHỐI]') || (log.notes && log.notes.includes('[ĐÃ TỪ CHỐI]'));
+          
+          let color = 'blue';
+          if (isPending) color = 'orange';
+          else if (isRejected) color = 'red';
+          else if (isImport) color = 'green';
+
+          return {
+            color: color,
+            content: (
+              <div>
+                <Text strong>{dayjs(log.transactionDate).format('DD/MM/YYYY HH:mm')} - </Text>
+                <Text>{log.notes || `${isImport ? 'Nhập' : 'Xuất'} ${log.quantity} ${historyItem.unit}`}</Text>
+                {log.referenceDocument && (
+                  <div><Text type="secondary" style={{ fontSize: '12px' }}>Mã chứng từ: {log.referenceDocument}</Text></div>
+                )}
+              </div>
+            )
+          };
+        })}
+      />
+    );
+  };
+
   return (
     <Card style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
-        <Title level={2} style={{ margin: 0 }}><BoxPlotOutlined /> Quản lý Vật tư & Kho</Title>
-        <Space>
-          <Input 
-            placeholder="Tìm tên vật tư..." 
-            prefix={<SearchOutlined style={{ color: '#94a3b8' }}/>} 
-            style={{ width: 300, height: 40, borderRadius: 10 }}
-            onChange={e => setSearchText(e.target.value)}
-            allowClear
-          />
-          <Button 
-            type="primary" 
-            icon={<PlusOutlined />} 
-            onClick={() => { setEditingItem(null); form.resetFields(); setIsModalOpen(true); }} 
-            style={{ background: '#f43f5e', height: 40, borderRadius: 10, fontWeight: 600 }}
-          >
-            Nhập kho mới
-          </Button>
-        </Space>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24, alignItems: 'center' }}>
+        <div>
+          <Title level={2} style={{ margin: 0 }}><BoxPlotOutlined /> Quản lý Vật tư & Yêu cầu cấp phát</Title>
+          <Text type="secondary">Nhân viên: {currentUser?.fullName} - Vai trò: {userRoles.join(', ')}</Text>
+        </div>
+        {activeTab === 'inventory' && (
+          <Space>
+            <Input 
+              placeholder="Tìm tên vật tư..." 
+              prefix={<SearchOutlined style={{ color: '#94a3b8' }}/>} 
+              style={{ width: 280, height: 40, borderRadius: 8 }}
+              onChange={e => setSearchText(e.target.value)}
+              allowClear
+            />
+            {isDirectorOrAdmin && (
+              <Button 
+                type="primary" 
+                icon={<PlusOutlined />} 
+                onClick={() => { setEditingItem(null); form.resetFields(); setIsModalOpen(true); }} 
+                style={{ background: '#f43f5e', height: 40, borderRadius: 8, fontWeight: 600 }}
+              >
+                Nhập kho mới
+              </Button>
+            )}
+          </Space>
+        )}
       </div>
 
-      <Table columns={columns} dataSource={filteredData} rowKey="id" bordered loading={loading} />
+      <Tabs activeKey={activeTab} onChange={key => setActiveTab(key)}>
+        <Tabs.TabPane tab="Danh mục tồn kho" key="inventory">
+          <Table columns={columns} dataSource={filteredData} rowKey="id" bordered loading={loading} />
+        </Tabs.TabPane>
+        <Tabs.TabPane tab="Yêu cầu cấp phát (Chờ duyệt)" key="requests">
+          <Table
+            dataSource={pendingRequests}
+            rowKey="id"
+            bordered
+            columns={[
+              {
+                title: 'Nội dung yêu cầu từ bảo mẫu',
+                dataIndex: 'notes',
+                key: 'notes',
+                render: (notes: string) => {
+                  // Clean up the text by removing [ĐANG CHỜ DUYỆT] prefix for nicer display
+                  const cleanText = notes.replace('[ĐANG CHỜ DUYỆT] ', '').replace('[ĐANG CHỜ DUYỆT]', '');
+                  return <Text strong>{cleanText}</Text>;
+                }
+              },
+              {
+                title: 'Số lượng yêu cầu',
+                dataIndex: 'quantity',
+                key: 'quantity',
+                width: 150,
+                render: (qty: number, record: any) => {
+                  // Find unit from inventory
+                  const invItem = data.find(i => i.id === record.itemId);
+                  return <Text>{qty} {invItem?.unit || 'đơn vị'}</Text>;
+                }
+              },
+              {
+                title: 'Ngày gửi',
+                dataIndex: 'transactionDate',
+                key: 'transactionDate',
+                width: 180,
+                render: (date: any) => dayjs(date).format('DD/MM/YYYY HH:mm')
+              },
+              {
+                title: 'Duyệt yêu cầu',
+                key: 'approveAction',
+                width: 150,
+                render: (_: any, record: any) => (
+                  <Space>
+                    <Popconfirm title="Duyệt cấp phát vật tư này?" onConfirm={() => handleProcessRequest(record.id, true)}>
+                      <Button type="primary" size="small" style={{ backgroundColor: '#10b981', borderColor: '#10b981' }} icon={<CheckOutlined />}>
+                        Duyệt
+                      </Button>
+                    </Popconfirm>
+                    <Popconfirm title="Từ chối cấp phát vật tư này?" onConfirm={() => handleProcessRequest(record.id, false)} okButtonProps={{ danger: true }}>
+                      <Button danger size="small" icon={<CloseOutlined />}>
+                        Từ chối
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                )
+              }
+            ]}
+          />
+        </Tabs.TabPane>
+      </Tabs>
 
       {/* MODAL THÊM / SỬA */}
       <Modal 
@@ -217,22 +372,16 @@ const SuppliesManagement: React.FC = () => {
         </Form>
       </Modal>
 
-      {/* MODAL LỊCH SỬ TĨNH */}
+      {/* MODAL LỊCH SỬ GIAO DỊCH */}
       <Modal
-        title={<Title level={3}>Lịch sử nhập/xuất: {historyItem?.name}</Title>}
+        title={<Title level={3}>Lịch sử giao dịch: {historyItem?.name}</Title>}
         open={isHistoryOpen}
         onCancel={() => setIsHistoryOpen(false)}
         footer={[<Button key="close" onClick={() => setIsHistoryOpen(false)}>Đóng</Button>]}
         centered
       >
-        <div style={{ marginTop: 30, padding: '0 20px' }}>
-          <Timeline
-            items={[
-              { color: 'green', content: 'Hôm nay - Nhập thêm 20 đơn vị từ nguồn Tài trợ (Vinamilk)' },
-              { color: 'blue', content: 'Hôm qua - Xuất 5 đơn vị cho khu chăm sóc trẻ sơ sinh' },
-              { color: 'gray', content: '01/05/2026 - Khởi tạo tồn kho ban đầu' },
-            ]}
-          />
+        <div style={{ marginTop: 20, padding: '0 10px', maxHeight: '400px', overflowY: 'auto' }}>
+          {renderHistoryTimeline()}
         </div>
       </Modal>
     </Card>

@@ -80,7 +80,6 @@ const AdoptionPortal: React.FC = () => {
   
   // New Application Form wizard State
   const [currentStep, setCurrentStep] = useState<number>(1);
-  const [selectedChildId, setSelectedChildId] = useState<string>('');
   const [formState, setFormState] = useState({
     fullName: '',
     phone: '',
@@ -90,6 +89,7 @@ const AdoptionPortal: React.FC = () => {
     occupation: '',
     incomeScope: '',
     homeDesc: '',
+    desiredCriteria: '',
     reason: '',
     doc1Uploaded: false,
     doc2Uploaded: false,
@@ -98,7 +98,39 @@ const AdoptionPortal: React.FC = () => {
   });
 
   // Calculate approval status based on applications
-  const isApproved = applications.some(a => a.status === 1 || a.status === 'Approved');
+  const isApproved = applications.some(a => {
+    const s = a.status !== undefined && a.status !== null ? a.status.toString() : '';
+    return s === '1' || s === 'Approved' || s === '4' || s === 'Completed';
+  });
+
+  // Calculate verified status (approved by manager/director, awaiting matching or further steps)
+  const isVerified = applications.some(a => {
+    const s = a.status !== undefined && a.status !== null ? a.status.toString() : '';
+    return ['1', 'Approved', '3', 'AwaitingMatching', '4', 'Completed', '6', 'MatchingProposed', '7', 'AdopterAccepted'].includes(s);
+  });
+
+  const getAdoptionStep = () => {
+    if (applications.length === 0) return 0;
+    const latestApp = applications[0];
+    const statusVal = latestApp.status !== undefined && latestApp.status !== null ? latestApp.status.toString() : '';
+
+    if (statusVal === '0' || statusVal === 'Pending' || statusVal === '2' || statusVal === 'Rejected') {
+      return 0; // Bước 1: Nộp đơn đăng ký
+    }
+    if (statusVal === '3' || statusVal === 'AwaitingMatching') {
+      return 1; // Bước 2: Xác minh gia cảnh
+    }
+    if (statusVal === '6' || statusVal === 'MatchingProposed' || statusVal === '7' || statusVal === 'AdopterAccepted' || statusVal === '8' || statusVal === 'AdopterRejected') {
+      return 2; // Bước 3: Đề xuất & Phản hồi
+    }
+    if (statusVal === '1' || statusVal === 'Approved') {
+      return 3; // Bước 4: Phê duyệt quyết định
+    }
+    if (statusVal === '4' || statusVal === 'Completed') {
+      return 4; // Bước 5: Bàn giao & Hoàn thành
+    }
+    return 0;
+  };
 
   // Load User Information & Applications on mount
   useEffect(() => {
@@ -170,16 +202,19 @@ const AdoptionPortal: React.FC = () => {
     }
   };
 
-  // Trigger form view and prefill child if selected from gallery
-  const startNewApplication = (childId?: string) => {
+  // Trigger form view
+  const startNewApplication = () => {
     setView('form');
     setCurrentStep(1);
-    if (childId) {
-      setSelectedChildId(childId);
-    } else {
-      setSelectedChildId('');
-    }
-    fetchChildren();
+    setFormState(prev => ({
+      ...prev,
+      desiredCriteria: '',
+      reason: '',
+      agreed: false,
+      doc1Uploaded: false,
+      doc2Uploaded: false,
+      doc3Uploaded: false
+    }));
   };
 
   const handleNextStep = () => {
@@ -190,8 +225,8 @@ const AdoptionPortal: React.FC = () => {
       }
     }
     if (currentStep === 2) {
-      if (!selectedChildId) {
-        message.warning('Vui lòng chọn em bé bạn muốn đăng ký nhận nuôi (*)');
+      if (!formState.desiredCriteria) {
+        message.warning('Vui lòng nhập các tiêu chí trẻ em mong muốn nhận nuôi (*)');
         return;
       }
       if (!formState.occupation || !formState.incomeScope || !formState.homeDesc) {
@@ -241,17 +276,16 @@ const AdoptionPortal: React.FC = () => {
       // 2. Submit Adoption application
       const structuredNotes = `Nghề nghiệp: ${formState.occupation}\nThu nhập: ${formState.incomeScope}\nMô tả không gian sống: ${formState.homeDesc}`;
       await apiClient.post('/api/AdoptionApplications', {
-        childId: selectedChildId,
+        childId: null,
+        desiredCriteria: formState.desiredCriteria,
         reason: formState.reason || 'Mong muốn nuôi dưỡng em bé trưởng thành.',
         notes: structuredNotes
       });
 
       message.success('Gửi hồ sơ đăng ký nhận nuôi trực tuyến thành công!');
       setView('portal');
-      setActiveTab('history'); // Switch to history tab to track progress
       fetchApplications();
       fetchUserData();
-      fetchChildren(); // Refresh children info (now they might have unlocked names if approved)
       if (fetchUserInfo) {
         fetchUserInfo();
       }
@@ -303,6 +337,24 @@ const AdoptionPortal: React.FC = () => {
       case '2':
       case 'Rejected': 
         return <Tag color="error" icon={<CloseCircleOutlined />} style={{ padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>TỪ CHỐI</Tag>;
+      case '3':
+      case 'AwaitingMatching':
+        return <Tag color="processing" icon={<ClockCircleOutlined />} style={{ padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>CHỜ GHÉP ĐÔI</Tag>;
+      case '4':
+      case 'Completed':
+        return <Tag color="success" icon={<CheckCircleOutlined />} style={{ padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>HOÀN THÀNH</Tag>;
+      case '5':
+      case 'Overdue':
+        return <Tag color="error" icon={<ClockCircleOutlined />} style={{ padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>TRỄ HẠN</Tag>;
+      case '6':
+      case 'MatchingProposed':
+        return <Tag color="purple" icon={<InfoCircleOutlined />} style={{ padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>ĐÃ ĐỀ XUẤT BÉ</Tag>;
+      case '7':
+      case 'AdopterAccepted':
+        return <Tag color="cyan" icon={<CheckCircleOutlined />} style={{ padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>ĐÃ ĐỒNG Ý BÉ</Tag>;
+      case '8':
+      case 'AdopterRejected':
+        return <Tag color="orange" icon={<CloseCircleOutlined />} style={{ padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>ĐÃ TỪ CHỐI BÉ</Tag>;
       default: 
         return <Tag color="default" style={{ padding: '4px 10px', borderRadius: '6px' }}>{statusVal}</Tag>;
     }
@@ -375,6 +427,41 @@ const AdoptionPortal: React.FC = () => {
     // Fallback vector placeholder for masked child
     return 'https://images.unsplash.com/photo-1595250912759-99446d5c6be2?q=80&w=300&auto=format&fit=crop';
   };
+
+  const handleProposalDecision = async (appId: string, decisionStatus: number) => {
+    Modal.confirm({
+      title: decisionStatus === 7 ? 'Xác nhận đồng ý nhận nuôi?' : 'Xác nhận từ chối đề xuất?',
+      content: decisionStatus === 7 
+        ? 'Bạn đồng ý với đề xuất ghép đôi bé này. Hồ sơ sẽ được chuyển lên Giám đốc để phê duyệt quyết định nhận nuôi chính thức.' 
+        : 'Bạn từ chối đề xuất ghép đôi này. Trung tâm sẽ tiến hành tìm kiếm và đề xuất bé khác phù hợp hơn.',
+      okText: 'Xác nhận',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          const app = applications.find(a => a.id === appId);
+          if (!app) return;
+          await apiClient.put(`/api/AdoptionApplications/${appId}`, {
+            id: appId,
+            childId: app.childId,
+            status: decisionStatus,
+            reason: app.reason,
+            notes: app.notes,
+            desiredCriteria: app.desiredCriteria
+          });
+          message.success(decisionStatus === 7 ? 'Đã phản hồi đồng ý nhận nuôi bé!' : 'Đã phản hồi từ chối đề xuất bé.');
+          fetchApplications();
+        } catch (error: any) {
+          console.error('Error updating proposal status:', error);
+          message.error(error.response?.data?.detail || 'Không thể cập nhật phản hồi.');
+        }
+      }
+    });
+  };
+
+  const proposedApplication = applications.find(a => {
+    const s = a.status !== undefined && a.status !== null ? a.status.toString() : '';
+    return s === '6' || s === 'MatchingProposed';
+  });
 
   return (
     <div style={{ maxWidth: '1200px', margin: '30px auto', padding: '0 20px', minHeight: '80vh' }}>
@@ -450,20 +537,20 @@ const AdoptionPortal: React.FC = () => {
               <Space direction="vertical" size={4}>
                 <Text type="secondary" className="text-xs uppercase tracking-wider font-bold">Trạng thái xác thực</Text>
                 <div className="flex items-center gap-2">
-                  {isApproved ? (
+                  {isVerified ? (
                     <>
                       <BadgeCheck className="text-emerald-500 w-8 h-8" />
                       <div>
-                        <p className="text-sm font-bold text-emerald-600 leading-none">Đã xác minh</p>
-                        <p className="text-[10px] text-slate-400 mt-1">Đã mở khóa toàn bộ ảnh các bé</p>
+                        <p className="text-sm font-bold text-emerald-600 leading-none">Hồ sơ đã xác minh</p>
+                        <p className="text-[10px] text-slate-400 mt-1">Đủ điều kiện đề xuất ghép đôi</p>
                       </div>
                     </>
                   ) : (
                     <>
                       <Lock className="text-amber-500 w-7 h-7" />
                       <div>
-                        <p className="text-sm font-bold text-amber-600 leading-none">Chờ xác minh bước 1</p>
-                        <p className="text-[10px] text-slate-400 mt-1">Ảnh của bé đang được ẩn danh bảo mật</p>
+                        <p className="text-sm font-bold text-amber-600 leading-none">Chờ xác minh hồ sơ</p>
+                        <p className="text-[10px] text-slate-400 mt-1">Đang kiểm tra điều kiện gia cảnh</p>
                       </div>
                     </>
                   )}
@@ -495,146 +582,120 @@ const AdoptionPortal: React.FC = () => {
           >
             <Steps
               size="small"
-              current={isApproved ? 1 : 0}
+              current={getAdoptionStep()}
               items={[
-                { title: '1. Nộp đơn đăng ký', description: 'Khai thông tin gia cảnh trực tuyến' },
-                { title: '2. Phê duyệt sơ bộ', description: 'Mở khóa hình ảnh chi tiết các bé' },
-                { title: '3. Phỏng vấn trực tiếp', description: 'Trao đổi tâm lý & định hướng nuôi dạy' },
-                { title: '4. Khảo sát gia cảnh', description: 'Kiểm tra thực tế không gian sống' },
-                { title: '5. Quyết định bàn giao', description: 'Hoàn tất thủ tục pháp lý bảo trợ' }
+                { title: '1. Nộp đơn đăng ký', description: 'Đang thẩm định hồ sơ' },
+                { title: '2. Xác minh gia cảnh', description: 'Khảo sát & Lập báo cáo' },
+                { title: '3. Đề xuất & Phản hồi', description: 'Ghép đôi & Nhận phản hồi' },
+                { title: '4. Phê duyệt quyết định', description: 'Giám đốc phê duyệt cuối' },
+                { title: '5. Bàn giao & Hoàn thành', description: 'Ký biên bản & Nhận con' }
               ]}
               style={{ padding: '8px 0' }}
             />
           </Card>
 
-          {/* Tabs Container */}
-          <div className="bg-white rounded-2xl shadow-xs border border-slate-100 p-6">
-            <Tabs 
-              activeKey={activeTab} 
-              onChange={key => setActiveTab(key)}
-              items={[
-                {
-                  key: 'children',
-                  label: <span className="font-bold text-sm">🏡 Danh sách các bé tại trung tâm</span>,
-                  children: (
-                    <div className="space-y-6">
-                      
-                      {/* Security Information Alert */}
-                      {!isApproved ? (
-                        <Alert
-                          message={<b style={{ color: '#b45309' }}>Quy chế Bảo mật và An toàn Trẻ em</b>}
-                          description="Để tuân thủ pháp luật về bảo vệ quyền trẻ em, toàn bộ tên thật và hình ảnh thực tế của các bé sẽ tạm thời ẩn danh cho đến khi đơn đăng ký của bạn được Ban Giám đốc phê duyệt bước 1. Hiện tại, bạn vẫn có thể gửi đơn đăng ký nguyện vọng nhận nuôi bé bất kỳ dựa trên tuổi, giới tính và mã số ẩn danh."
-                          type="warning"
-                          showIcon
-                          icon={<Lock className="text-amber-500" size={18} />}
-                          style={{ borderRadius: 12 }}
-                        />
-                      ) : (
-                        <Alert
-                          message={<b style={{ color: '#047857' }}>Hồ sơ Đăng ký Nhận nuôi đã được thông qua sơ bộ!</b>}
-                          description="Hồ sơ lý lịch của bạn đã được duyệt. Toàn bộ hình ảnh thực tế, tên thật cũng như hồ sơ y tế/gia cảnh của các bé đã được mở khóa hoàn toàn. Bạn có thể chọn bé cụ thể bên dưới để gửi yêu cầu nhận nuôi bé đó."
-                          type="success"
-                          showIcon
-                          icon={<Unlock className="text-emerald-500" size={18} />}
-                          style={{ borderRadius: 12 }}
-                        />
-                      )}
+          {/* Proposal confirmation card if any proposed matching */}
+          {proposedApplication && (
+            <Card 
+              variant="borderless" 
+              className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border border-purple-100 rounded-3xl shadow-md p-6 md:p-8"
+            >
+              <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-center md:items-start">
+                {/* Child Image */}
+                <div className="relative w-48 h-48 md:w-56 md:h-56 bg-slate-200 rounded-2xl overflow-hidden shadow-lg shrink-0 border-4 border-white">
+                  <Image 
+                    src={proposedApplication.childAvatarUrl ? (proposedApplication.childAvatarUrl.startsWith('http') ? proposedApplication.childAvatarUrl : `${apiClient.defaults.baseURL || 'http://localhost:5176'}${proposedApplication.childAvatarUrl}`) : 'https://images.unsplash.com/photo-1595250912759-99446d5c6be2?q=80&w=300&auto=format&fit=crop'}
+                    alt={proposedApplication.childName}
+                    className="object-cover w-full h-full"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                  <span className="absolute top-2 right-2 inline-flex items-center gap-1 px-2.5 py-0.5 bg-rose-500 text-white rounded-full text-[10px] font-bold uppercase tracking-wider">
+                    Đề xuất ghép đôi
+                  </span>
+                </div>
 
-                      {loadingChildren ? (
-                        <div className="text-center py-10"><Spin /> Loading...</div>
-                      ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                          {children.map((child: any) => (
-                            <Card 
-                              key={child.id}
-                              hoverable
-                              cover={
-                                <div className="relative h-64 w-full bg-slate-100 overflow-hidden flex items-center justify-center">
-                                  <Image 
-                                    src={getChildImageUrl(child)} 
-                                    alt={child.fullName} 
-                                    className="object-cover w-full h-full"
-                                    style={{ height: '100%', width: '100%', objectFit: 'cover' }}
-                                    wrapperStyle={{ width: '100%', height: '100%', display: 'block' }}
-                                    preview={isApproved ? {
-                                      mask: (
-                                        <div className="flex flex-col items-center justify-center text-xs text-white">
-                                          <EyeOutlined className="text-lg mb-1" />
-                                          <span>Xem ảnh đầy đủ</span>
-                                        </div>
-                                      )
-                                    } : false}
-                                    fallback="https://images.unsplash.com/photo-1595250912759-99446d5c6be2?q=80&w=300&auto=format&fit=crop"
-                                  />
-                                  {!isApproved && (
-                                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs flex flex-col items-center justify-center text-white p-4 text-center z-10 pointer-events-none">
-                                      <Lock className="w-8 h-8 mb-2 text-rose-300" />
-                                      <span className="text-xs font-bold uppercase tracking-wider">Hình ảnh đang khóa</span>
-                                      <span className="text-[10px] text-slate-300 mt-1">Phê duyệt hồ sơ để mở khóa</span>
-                                    </div>
-                                  )}
-                                </div>
-                              }
-                              style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid #f1f5f9' }}
-                            >
-                              <Card.Meta
-                                title={
-                                  <div className="flex justify-between items-center">
-                                    <span className="font-bold text-slate-900">{child.fullName}</span>
-                                    <Tag color={child.gender === 0 || child.gender === 'Male' ? 'blue' : 'pink'} className="text-[10px] font-bold rounded-sm">
-                                      {child.gender === 0 || child.gender === 'Male' ? 'Nam' : 'Nữ'}
-                                    </Tag>
-                                  </div>
-                                }
-                                description={
-                                  <Space direction="vertical" size={4} style={{ width: '100%', marginTop: 8 }}>
-                                    <Text type="secondary" className="text-xs">Sức khỏe: <b className="text-slate-700">{child.healthStatus || 'Khỏe mạnh'}</b></Text>
-                                    <Text type="secondary" className="text-xs">
-                                      Lý lịch: <span className="text-slate-600 line-clamp-1">{child.background || 'Thông tin bảo mật'}</span>
-                                    </Text>
-                                    
-                                    <Divider style={{ margin: '10px 0' }} />
-                                    
-                                    <Button 
-                                      type="primary" 
-                                      block 
-                                      onClick={() => startNewApplication(child.id)}
-                                      style={{ 
-                                        borderRadius: 8, 
-                                        fontWeight: 600,
-                                        background: isApproved ? '#10b981' : '#f43f5e',
-                                        borderColor: isApproved ? '#10b981' : '#f43f5e'
-                                      }}
-                                    >
-                                      {isApproved ? 'Gửi yêu cầu nhận nuôi bé này 💖' : 'Gửi đơn đăng ký nhận nuôi'}
-                                    </Button>
-                                  </Space>
-                                }
-                              />
-                            </Card>
-                          ))}
-                        </div>
-                      )}
+                {/* Proposal Info & Choices */}
+                <div className="flex-1 space-y-4 text-center md:text-left">
+                  <div>
+                    <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight flex items-center justify-center md:justify-start gap-2">
+                      ✨ Đề xuất ghép đôi nhận nuôi bé {proposedApplication.childName}
+                    </h2>
+                    <p className="text-slate-500 text-xs mt-1">
+                      Dựa trên các tiêu chí mong muốn của gia đình bạn: <i className="text-slate-700 font-medium">"{proposedApplication.desiredCriteria || 'Tùy chọn'}"</i>
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 max-w-md bg-white/70 p-4 rounded-xl border border-slate-100 text-xs">
+                    <div>
+                      <span className="text-slate-400 font-medium">Họ tên bé:</span>
+                      <p className="font-bold text-slate-800 mt-0.5">{proposedApplication.childName}</p>
                     </div>
-                  ),
-                },
-                {
-                  key: 'history',
-                  label: <span className="font-bold text-sm">📄 Lịch sử đơn đăng ký của bạn</span>,
-                  children: (
-                    <Table 
-                      columns={columns} 
-                      dataSource={applications} 
-                      rowKey="id" 
-                      loading={loadingApps}
-                      pagination={applications.length > 5 ? { pageSize: 5 } : false}
-                      locale={{ emptyText: 'Bạn chưa có hồ sơ đăng ký nhận nuôi nào.' }}
-                    />
-                  ),
-                }
-              ]}
+                    <div>
+                      <span className="text-slate-400 font-medium">Giới tính:</span>
+                      <p className="font-bold text-slate-800 mt-0.5">
+                        {proposedApplication.childGender === 0 || proposedApplication.childGender === 'Male' ? 'Nam' : 'Nữ'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-medium">Tình trạng sức khỏe:</span>
+                      <p className="font-bold text-slate-800 mt-0.5">{proposedApplication.childHealthStatus || 'Khỏe mạnh'}</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-medium">Lý lịch hoàn cảnh:</span>
+                      <p className="font-bold text-slate-800 mt-0.5 truncate">{proposedApplication.childBackground || 'Chưa cập nhật'}</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex flex-wrap gap-3 justify-center md:justify-start">
+                    <Button 
+                      type="primary" 
+                      size="large" 
+                      icon={<Check size={16} />}
+                      onClick={() => handleProposalDecision(proposedApplication.id, 7)}
+                      style={{ 
+                        borderRadius: 12, 
+                        fontWeight: 700, 
+                        backgroundColor: '#10b981', 
+                        borderColor: '#10b981',
+                        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
+                      }}
+                    >
+                      Đồng ý nhận nuôi bé này
+                    </Button>
+                    <Button 
+                      type="default" 
+                      danger
+                      size="large" 
+                      icon={<Clock size={16} />}
+                      onClick={() => handleProposalDecision(proposedApplication.id, 8)}
+                      style={{ 
+                        borderRadius: 12, 
+                        fontWeight: 700 
+                      }}
+                    >
+                      Từ chối đề xuất, tìm bé khác
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* History applications list (replacing tabs) */}
+          <Card 
+            title={<span className="font-bold text-slate-800 flex items-center gap-2"><FileText size={18} className="text-rose-500" /> Danh sách hồ sơ đăng ký nhận nuôi của bạn</span>}
+            variant="borderless" 
+            style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
+          >
+            <Table 
+              columns={columns} 
+              dataSource={applications} 
+              rowKey="id" 
+              loading={loadingApps}
+              pagination={applications.length > 5 ? { pageSize: 5 } : false}
+              locale={{ emptyText: 'Bạn chưa có hồ sơ đăng ký nhận nuôi nào.' }}
             />
-          </div>
+          </Card>
         </Space>
       )}
 
@@ -668,7 +729,7 @@ const AdoptionPortal: React.FC = () => {
               size="small"
               items={[
                 { title: 'Thông tin cá nhân', icon: <User size={16} /> },
-                { title: 'Chọn bé & Khảo sát', icon: <Home size={16} /> },
+                { title: 'Khảo sát điều kiện', icon: <Home size={16} /> },
                 { title: 'Hồ sơ pháp lý', icon: <FolderOpen size={16} /> },
                 { title: 'Cam kết & Gửi', icon: <BadgeCheck size={16} /> }
               ]}
@@ -760,33 +821,25 @@ const AdoptionPortal: React.FC = () => {
               {currentStep === 2 && (
                 <div className="space-y-6">
                   <div>
-                    <h2 className="text-lg font-bold text-slate-800">Bước 2: Chọn em bé &amp; Khảo sát điều kiện gia cảnh</h2>
+                    <h2 className="text-lg font-bold text-slate-800">Bước 2: Khảo sát điều kiện gia cảnh</h2>
                     <p className="text-xs text-slate-400">Môi trường sống an toàn và tài chính vững vàng giúp trẻ phát triển khỏe mạnh.</p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
                     
-                    {/* Child Selection Dropdown */}
+                    {/* Desired Criteria Input */}
                     <div className="space-y-2 md:col-span-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Chọn bé đăng ký nhận nuôi *</label>
-                      <Select
-                        showSearch
-                        placeholder="Tìm và chọn em bé đăng ký nhận nuôi..."
-                        optionFilterProp="children"
-                        value={selectedChildId || undefined}
-                        onChange={val => setSelectedChildId(val)}
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Tiêu chí trẻ em mong muốn nhận nuôi *</label>
+                      <Input.TextArea 
+                        placeholder="Vui lòng nhập tiêu chí mong muốn của gia đình (Ví dụ: Giới tính: Nam/Nữ, Độ tuổi: 0-3 tuổi, Tình trạng sức khỏe: Bình thường/Khỏe mạnh...)" 
+                        value={formState.desiredCriteria} 
+                        onChange={e => setFormState(p => ({ ...p, desiredCriteria: e.target.value }))}
                         size="large"
-                        loading={loadingChildren}
-                        style={{ width: '100%' }}
-                      >
-                        {children.map((c: any) => (
-                          <Select.Option key={c.id} value={c.id}>
-                            {isApproved ? c.fullName : `Trẻ em ẩn danh ${c.id.substring(0, 8).toUpperCase()}`} ({c.gender === 0 || c.gender === 'Male' ? 'Nam' : 'Nữ'} - {c.healthStatus || 'Khỏe mạnh'})
-                          </Select.Option>
-                        ))}
-                      </Select>
+                        autoSize={{ minRows: 3, maxRows: 5 }}
+                        style={{ borderRadius: 8 }}
+                      />
                       <Text type="secondary" className="text-[11px] block mt-1">
-                        <InfoCircleOutlined /> Chỉ hiển thị các bé đang hoạt động (chưa được nhận nuôi) tại trung tâm.
+                        <InfoCircleOutlined /> Ban Giám Đốc sẽ căn cứ vào tiêu chí này để chọn đề xuất bé phù hợp nhất cho gia đình bạn.
                       </Text>
                     </div>
 
@@ -1137,49 +1190,70 @@ const AdoptionPortal: React.FC = () => {
             <div>
               <Text strong className="text-xs uppercase tracking-wider text-slate-400 block mb-4">Tiến độ phê duyệt hồ sơ</Text>
               
-              <Steps
-                size="small"
-                current={
-                  selectedApp.status === 1 || selectedApp.status === 'Approved' 
-                    ? 4 
-                    : selectedApp.status === 2 || selectedApp.status === 'Rejected' 
-                      ? 1 
-                      : 1
-                }
-                items={[
-                  { 
-                    title: 'Gửi hồ sơ', 
-                    description: formatDate(selectedApp.submitDate),
-                    status: 'finish'
-                  },
-                  { 
-                    title: 'Thẩm định hồ sơ', 
-                    description: selectedApp.status === 0 || selectedApp.status === 'Pending' ? 'Đang thực hiện' : 'Hoàn thành',
-                    status: selectedApp.status === 2 || selectedApp.status === 'Rejected' ? 'error' : (selectedApp.status === 0 || selectedApp.status === 'Pending' ? 'process' : 'finish')
-                  },
-                  { 
-                    title: 'Phỏng vấn trực tiếp', 
-                    description: selectedApp.status === 1 || selectedApp.status === 'Approved' ? 'Hoàn thành' : 'Chưa diễn ra',
-                    status: selectedApp.status === 1 || selectedApp.status === 'Approved' ? 'finish' : 'wait'
-                  },
-                  { 
-                    title: 'Kiểm tra gia cảnh', 
-                    status: selectedApp.status === 1 || selectedApp.status === 'Approved' ? 'finish' : 'wait'
-                  },
-                  { 
-                    title: 'Hoàn tất thủ tục', 
-                    status: selectedApp.status === 1 || selectedApp.status === 'Approved' ? 'finish' : 'wait'
+              {(() => {
+                const getModalStepIndexAndStatus = (status: any) => {
+                  if (status === undefined || status === null) return { current: 0, stepStatus: 'process' };
+                  const statusVal = typeof status === 'string' ? status : status.toString();
+                  switch (statusVal) {
+                    case '0':
+                    case 'Pending':
+                      return { current: 0, stepStatus: 'process' };
+                    case '3':
+                    case 'AwaitingMatching':
+                      return { current: 1, stepStatus: 'process' };
+                    case '6':
+                    case 'MatchingProposed':
+                      return { current: 2, stepStatus: 'process' };
+                    case '7':
+                    case 'AdopterAccepted':
+                      return { current: 2, stepStatus: 'finish' };
+                    case '8':
+                    case 'AdopterRejected':
+                      return { current: 2, stepStatus: 'error' };
+                    case '2':
+                    case 'Rejected':
+                      return { current: 0, stepStatus: 'error' };
+                    case '1':
+                    case 'Approved':
+                      return { current: 3, stepStatus: 'process' };
+                    case '4':
+                    case 'Completed':
+                      return { current: 4, stepStatus: 'finish' };
+                    default:
+                      return { current: 0, stepStatus: 'process' };
                   }
-                ]}
-              />
+                };
+                const { current: stepCurrent, stepStatus } = getModalStepIndexAndStatus(selectedApp.status);
+                return (
+                  <Steps
+                    size="small"
+                    current={stepCurrent}
+                    status={stepStatus as any}
+                    items={[
+                      { title: 'Nộp đơn', description: formatDate(selectedApp.submitDate) },
+                      { title: 'Xác minh gia cảnh' },
+                      { title: 'Đề xuất & Phản hồi' },
+                      { title: 'Phê duyệt quyết định' },
+                      { title: 'Bàn giao & Hoàn thành' }
+                    ]}
+                  />
+                );
+              })()}
             </div>
 
             {/* Application Detail Details Card */}
             <Card style={{ background: '#f8fafc', borderRadius: 16, border: '1px solid #f1f5f9' }} className="shadow-xs">
               <Space direction="vertical" style={{ width: '100%' }} size={12}>
                 <div>
-                  <Text type="secondary" className="text-xs">Em bé đăng ký nhận nuôi:</Text>
-                  <p className="text-sm font-bold text-slate-800 mt-1">{selectedApp.childName || 'Nguyễn Gia Bảo'}</p>
+                  <Text type="secondary" className="text-xs">Trạng thái hồ sơ:</Text>
+                  <div className="mt-1">{getStatusTag(selectedApp.status)}</div>
+                </div>
+
+                <Divider style={{ margin: '8px 0' }} />
+
+                <div>
+                  <Text type="secondary" className="text-xs">Tiêu chí trẻ em mong muốn:</Text>
+                  <p className="text-sm font-bold text-slate-800 mt-1">{selectedApp.desiredCriteria || 'Chưa cung cấp'}</p>
                 </div>
                 
                 <Divider style={{ margin: '8px 0' }} />
@@ -1195,6 +1269,28 @@ const AdoptionPortal: React.FC = () => {
                     <div>
                       <Text type="secondary" className="text-xs">Chi tiết gia cảnh &amp; Môi trường:</Text>
                       <p className="text-xs text-slate-600 mt-1 leading-relaxed whitespace-pre-wrap">{selectedApp.notes}</p>
+                    </div>
+                  </>
+                )}
+
+                {selectedApp.childId && (
+                  <>
+                    <Divider style={{ margin: '8px 0' }} />
+                    <div className="flex items-center gap-3 p-3 bg-rose-50/50 rounded-xl border border-rose-100">
+                      <Image 
+                        src={selectedApp.childAvatarUrl ? (selectedApp.childAvatarUrl.startsWith('http') ? selectedApp.childAvatarUrl : `${apiClient.defaults.baseURL || 'http://localhost:5176'}${selectedApp.childAvatarUrl}`) : 'https://images.unsplash.com/photo-1595250912759-99446d5c6be2?q=80&w=100&auto=format&fit=crop'}
+                        alt={selectedApp.childName}
+                        width={60}
+                        height={60}
+                        style={{ borderRadius: 8, objectFit: 'cover' }}
+                      />
+                      <div>
+                        <Text strong className="text-xs text-rose-700 block">Bé được đề xuất:</Text>
+                        <Text strong className="text-sm text-slate-800">{selectedApp.childName}</Text>
+                        <div className="text-[11px] text-slate-500 mt-0.5">
+                          Giới tính: {selectedApp.childGender === 0 || selectedApp.childGender === 'Male' ? 'Nam' : 'Nữ'} | Sức khỏe: {selectedApp.childHealthStatus || 'Khỏe mạnh'}
+                        </div>
+                      </div>
                     </div>
                   </>
                 )}

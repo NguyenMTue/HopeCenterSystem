@@ -29,6 +29,8 @@ const ShiftDashboard: React.FC = () => {
   const [dailyTasks, setDailyTasks] = useState<any[]>([]);
   const [inventoryItems, setInventoryItems] = useState<any[]>([]);
   const [vaccinations, setVaccinations] = useState<any[]>([]);
+  const [carePlans, setCarePlans] = useState<any[]>([]); // Danh sách kế hoạch chăm sóc để giao việc/nhiệm vụ
+  const [careLogs, setCareLogs] = useState<any[]>([]); // Ghi chú/Nhật ký của bảo mẫu cho kế hoạch chăm sóc
   
   const [loading, setLoading] = useState(false);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
@@ -70,6 +72,15 @@ const ShiftDashboard: React.FC = () => {
       });
       const allChildren = childrenRes.data.items || [];
 
+      // Fetch Care Plans list first (needed for filtering children who are assigned care plans)
+      const plansRes = await apiClient.get('/api/CarePlans');
+      const carePlansList = plansRes.data.lists || [];
+      setCarePlans(carePlansList);
+
+      const assignedChildIds = carePlansList
+        .filter((p: any) => p.employeeId === currentEmp.id && (p.status === 1 || p.status === 4 || p.status === 5))
+        .map((p: any) => p.childId);
+
       // Filter children assigned to the caregiver's location (Khu Mầm Non for tue4)
       let locationFilter = '';
       const pos = (currentEmp.position || '').toLowerCase();
@@ -84,7 +95,9 @@ const ShiftDashboard: React.FC = () => {
           .filter((r: any) => r.location === locationFilter)
           .map((r: any) => r.id);
 
-        myChildren = allChildren.filter((c: any) => c.roomId && myRoomIds.includes(c.roomId));
+        myChildren = allChildren.filter((c: any) => 
+          (c.roomId && myRoomIds.includes(c.roomId)) || assignedChildIds.includes(c.id)
+        );
       }
       setChildren(myChildren);
 
@@ -111,6 +124,10 @@ const ShiftDashboard: React.FC = () => {
       // 6. Fetch vaccinations list
       const vacRes = await apiClient.get('/api/Vaccinations');
       setVaccinations(vacRes.data.lists || []);
+
+      // 7. Fetch Care Logs list
+      const logsRes = await apiClient.get('/api/CareLogs');
+      setCareLogs(logsRes.data.lists || []);
     } catch (error) {
       console.error(error);
       message.error('Không thể tải thông tin ca trực');
@@ -142,8 +159,44 @@ const ShiftDashboard: React.FC = () => {
     originalVacId: v.id
   }));
 
-  // Hợp nhất danh sách task hàng ngày và lịch tiêm chủng
-  const combinedTasks = [...childTasks, ...childVaccinations];
+  // Lấy các kế hoạch/nhiệm vụ chăm sóc của trẻ đang chọn được phân công cho bảo mẫu này
+  const childPlans = carePlans.filter(p => 
+    p.childId === selectedChildId && 
+    p.employeeId === employeeInfo?.id &&
+    (p.status === 1 || p.status === 4 || p.status === 5)
+  ).map(p => {
+    const isOverdue = p.status === 5 || (p.status === 1 && dayjs().isAfter(dayjs(p.endDate), 'day'));
+    const statusText = p.status === 4 ? 'Đã hoàn thành' : (isOverdue ? 'Quá hạn (Trễ)' : 'Đang thực hiện');
+    
+    // Format vật tư kèm theo
+    const suppliesStr = p.supplies && p.supplies.length > 0
+      ? ` [Vật tư: ${p.supplies.map((s: any) => `${s.itemName} (x${s.quantity})`).join(', ')}]`
+      : '';
+
+    const planLogs = careLogs.filter((l: any) => l.planId === p.id);
+    const latestLog = planLogs.length > 0 ? planLogs[planLogs.length - 1] : null;
+    const caregiverNotes = latestLog ? latestLog.activityDetails : '';
+
+    return {
+      id: `plan-${p.id}`,
+      childId: p.childId,
+      taskName: `Kế hoạch: ${p.title || p.goal}${suppliesStr}`,
+      session: 'Sáng', // Hiển thị trong ca Sáng
+      careType: 'BasicCare',
+      isCompleted: p.status === 4,
+      note: caregiverNotes 
+        ? `Nhật ký: ${caregiverNotes} (Hạn: ${dayjs(p.endDate).format('DD/MM/YYYY')})` 
+        : `Hạn: ${dayjs(p.endDate).format('DD/MM/YYYY')} - Trạng thái: ${statusText}`,
+      caregiverNotes: caregiverNotes,
+      isCarePlan: true,
+      isOverdue: isOverdue,
+      originalPlanId: p.id,
+      supplies: p.supplies || []
+    };
+  });
+
+  // Hợp nhất danh sách task hàng ngày, lịch tiêm chủng và kế hoạch chăm sóc
+  const combinedTasks = [...childTasks, ...childVaccinations, ...childPlans];
 
   // Group tasks by session (Morning, Noon, Afternoon, Night)
   const sessions = {
@@ -173,6 +226,29 @@ const ShiftDashboard: React.FC = () => {
           const vacRes = await apiClient.get('/api/Vaccinations');
           setVaccinations(vacRes.data.lists || []);
         }
+      } else if (taskId.startsWith('plan-')) {
+        const originalPlanId = taskId.replace('plan-', '');
+        const plan = carePlans.find(p => p.id === originalPlanId);
+        if (plan) {
+          // Send update care plan request to mark completed (status = 4) or approved (status = 1)
+          await apiClient.put(`/api/CarePlans/${originalPlanId}`, {
+            id: originalPlanId,
+            title: plan.title,
+            startDate: plan.startDate,
+            endDate: plan.endDate,
+            employeeId: plan.employeeId,
+            status: checked ? 4 : 1, // 4 = Completed, 1 = Approved
+            supplies: (plan.supplies || []).map((s: any) => ({
+              inventoryItemId: s.inventoryItemId,
+              quantity: s.quantity
+            }))
+          });
+          message.success(checked ? 'Đã hoàn thành nhiệm vụ & tự động xuất vật tư đi kèm thành công!' : 'Đã hủy hoàn thành nhiệm vụ');
+          
+          // Refresh care plans list
+          const plansRes = await apiClient.get('/api/CarePlans');
+          setCarePlans(plansRes.data.lists || []);
+        }
       } else {
         const task = dailyTasks.find(t => t.id === taskId);
         await apiClient.put(`/api/DailyCareTasks/${taskId}`, {
@@ -198,19 +274,30 @@ const ShiftDashboard: React.FC = () => {
     if (!activeTask) return;
     setSubmittingNote(true);
     try {
-      await apiClient.put(`/api/DailyCareTasks/${activeTask.id}`, {
-        isCompleted: activeTask.isCompleted,
-        note: values.note
-      });
-      message.success('Đã lưu ghi chú công việc');
+      if (activeTask.isCarePlan) {
+        // Create a CareLog for the CarePlan task
+        await apiClient.post('/api/CareLogs', {
+          planId: activeTask.originalPlanId,
+          employeeId: employeeInfo?.id || null,
+          logTime: dayjs().toISOString(),
+          activityDetails: values.note,
+          status: activeTask.isCompleted ? 'Hoàn thành' : 'Đang thực hiện'
+        });
+        message.success('Đã ghi nhận nhật ký chăm sóc (Ghi chú kế hoạch)');
+      } else {
+        // Traditional DailyCareTask note update
+        await apiClient.put(`/api/DailyCareTasks/${activeTask.id}`, {
+          isCompleted: activeTask.isCompleted,
+          note: values.note
+        });
+        message.success('Đã lưu ghi chú công việc');
+      }
       setIsNoteModalOpen(false);
       noteForm.resetFields();
       setActiveTask(null);
-      // Refresh task list
-      const tasksRes = await apiClient.get('/api/DailyCareTasks', {
-        params: { employeeId: employeeInfo?.id, taskDate: dayjs().toISOString() }
-      });
-      setDailyTasks(tasksRes.data.lists || []);
+      
+      // Refresh task lists
+      await fetchData();
     } catch (error) {
       console.error(error);
       message.error('Không thể cập nhật ghi chú');
@@ -431,8 +518,8 @@ const ShiftDashboard: React.FC = () => {
                                 padding: '12px 16px',
                                 borderRadius: 8,
                                 marginBottom: 8,
-                                background: task.isVaccination ? '#f5f3ff' : (isMedical ? '#fff5f5' : '#f9fafb'),
-                                border: task.isVaccination ? '1px solid #d8b4fe' : (isMedical ? '1px solid #fecaca' : '1px solid #f3f4f6'),
+                                background: task.isVaccination ? '#f5f3ff' : (task.isCarePlan ? (task.isOverdue ? '#fff1f2' : '#f0fdf4') : (isMedical ? '#fff5f5' : '#f9fafb')),
+                                border: task.isVaccination ? '1px solid #d8b4fe' : (task.isCarePlan ? (task.isOverdue ? '1px solid #fecdd3' : '1px solid #bbf7d0') : (isMedical ? '1px solid #fecaca' : '1px solid #f3f4f6')),
                                 display: 'flex',
                                 justifyContent: 'space-between',
                                 alignItems: 'center'
@@ -444,7 +531,7 @@ const ShiftDashboard: React.FC = () => {
                                   onChange={e => handleToggleComplete(task.id, e.target.checked)}
                                   style={{
                                     transform: 'scale(1.1)',
-                                    color: task.isVaccination ? '#8b5cf6' : (isMedical ? '#ef4444' : '#3b82f6')
+                                    color: task.isVaccination ? '#8b5cf6' : (task.isCarePlan ? '#10b981' : (isMedical ? '#ef4444' : '#3b82f6'))
                                   }}
                                 />
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -452,12 +539,16 @@ const ShiftDashboard: React.FC = () => {
                                     {task.isVaccination && (
                                       <SyringeIcon style={{ color: '#8b5cf6', fontSize: '16px', marginRight: 4 }} />
                                     )}
-                                    <Text delete={task.isCompleted} strong={isMedical || task.isVaccination} style={{ color: task.isCompleted ? '#9ca3af' : '#1f2937' }}>
+                                    <Text delete={task.isCompleted} strong={isMedical || task.isVaccination || task.isCarePlan} style={{ color: task.isCompleted ? '#9ca3af' : '#1f2937' }}>
                                       {task.taskName}
                                     </Text>
                                     {task.isVaccination ? (
                                       <Tag color="purple" style={{ fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                         <SyringeIcon style={{ fontSize: '11px' }} /> Lịch Tiêm Chủng
+                                      </Tag>
+                                    ) : task.isCarePlan ? (
+                                      <Tag color={task.isOverdue ? "red" : "green"} style={{ fontSize: '10px', fontWeight: 600 }}>
+                                        {task.isOverdue ? "TRỄ / QUÁ HẠN" : "KẾ HOẠCH"}
                                       </Tag>
                                     ) : isMedical ? (
                                       <Tag color="red" style={{ fontSize: '10px' }}>Y Tế (Medical)</Tag>
@@ -478,7 +569,7 @@ const ShiftDashboard: React.FC = () => {
                                   type="text"
                                   onClick={() => {
                                     setActiveTask(task);
-                                    noteForm.setFieldsValue({ note: task.note || '' });
+                                    noteForm.setFieldsValue({ note: task.isCarePlan ? task.caregiverNotes : task.note || '' });
                                     setIsNoteModalOpen(true);
                                   }}
                                 />

@@ -8,6 +8,7 @@ import AdoptionManagement from '../pages/admin/AdoptionManagement';
 import DonationManagement from '../pages/admin/DonationManagement';
 import CarePlanManagement from '../pages/admin/CarePlanManagement';
 import IncidentManagement from '../pages/admin/IncidentManagement';
+import ManagerIncidentManagement from '../pages/admin/ManagerIncidentManagement';
 import SuppliesManagement from '../pages/admin/SuppliesManagement';
 import EmployeeManagement from '../pages/admin/EmployeeManagement';
 import RoleManagement from '../pages/admin/RoleManagement';
@@ -28,6 +29,7 @@ import AboutPage from '../pages/client/AboutPage';
 import AdoptionPage from '../pages/client/AdoptionPage';
 import DonationPage from '../pages/client/DonationPage';
 import AuthPage from '../pages/client/AuthPage';
+import CompleteProfilePage from '../pages/client/CompleteProfilePage';
 
 export const router = createBrowserRouter([
   // ==========================================
@@ -56,6 +58,10 @@ export const router = createBrowserRouter([
     path: '/register',
     element: <AuthPage initialMode="register" />,
   },
+  {
+    path: '/complete-profile',
+    element: <CompleteProfilePage />,
+  },
 
   // ==========================================
   // 3. GIAO DIỆN QUẢN TRỊ (ADMIN)
@@ -72,6 +78,7 @@ export const router = createBrowserRouter([
       { path: 'donations', element: <DonationManagement /> },
       { path: 'care-plans', element: <CarePlanManagement /> },
       { path: 'incidents', element: <IncidentManagement /> },
+      { path: 'manager-incidents', element: <ManagerIncidentManagement /> },
       { path: 'supplies', element: <SuppliesManagement /> },
       { path: 'employees', element: <EmployeeManagement /> },
       { path: 'roles', element: <RoleManagement /> },

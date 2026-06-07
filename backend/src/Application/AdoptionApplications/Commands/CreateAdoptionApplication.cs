@@ -11,6 +11,7 @@ public record CreateAdoptionApplicationCommand : IRequest<Guid>
     public Guid? ChildId { get; init; }
     public string? Reason { get; init; }
     public string? Notes { get; init; }
+    public string? DesiredCriteria { get; init; }
 }
 
 public class CreateAdoptionApplicationCommandHandler(IApplicationDbContext context, IUser user) : IRequestHandler<CreateAdoptionApplicationCommand, Guid>
@@ -40,6 +41,7 @@ public class CreateAdoptionApplicationCommandHandler(IApplicationDbContext conte
             ChildId = request.ChildId,
             Reason = request.Reason,
             Notes = request.Notes,
+            DesiredCriteria = request.DesiredCriteria,
             SubmitDate = DateTime.UtcNow,
             Status = ApplicationStatus.Pending
         };

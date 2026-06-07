@@ -13,6 +13,7 @@ public interface IApplicationDbContext
     DbSet<Child> Children { get; }
     DbSet<MedicalRecord> MedicalRecords { get; }
     DbSet<CarePlan> CarePlans { get; }
+    DbSet<CarePlanSupply> CarePlanSupplies { get; }
     DbSet<CareLog> CareLogs { get; }
     DbSet<Incident> Incidents { get; }
     DbSet<TaskAssignment> TaskAssignments { get; }

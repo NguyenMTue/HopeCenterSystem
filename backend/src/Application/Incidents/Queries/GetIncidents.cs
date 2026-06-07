@@ -34,6 +34,8 @@ public class IncidentDto
     public DateTime IncidentDate { get; init; }
     public string Description { get; init; } = null!;
     public IncidentSeverity? Severity { get; init; }
+    public string? Status { get; init; }
+    public string? ResolutionNotes { get; init; }
 
     private class Mapping : Profile
     {

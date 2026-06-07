@@ -6,6 +6,7 @@ using backend.Application.AdoptionApplications.Queries.GetAdoptionApplications;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using backend.Application.Common.Interfaces;
+using backend.Domain.Enums;
 
 namespace backend.Web.Endpoints;
 
@@ -64,7 +65,9 @@ public class AdoptionApplications : IEndpointGroup
             return TypedResults.Ok(new List<AdoptionApplicationDto>());
         }
 
-        var adopter = await context.Adopters.FirstOrDefaultAsync(a => a.AccountId == accountId);
+        var adopter = await context.Adopters
+            .Include(a => a.Account)
+            .FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (adopter == null)
         {
             return TypedResults.Ok(new List<AdoptionApplicationDto>());
@@ -78,15 +81,36 @@ public class AdoptionApplications : IEndpointGroup
                 Id = a.Id,
                 AdopterId = a.AdopterId,
                 AdopterName = adopter.FullName,
+                Phone = adopter.Account != null ? adopter.Account.PhoneNumber : null,
+                Address = adopter.Address,
                 ChildId = a.ChildId,
                 ChildName = a.Child != null ? a.Child.FullName : null,
                 SubmitDate = a.SubmitDate,
                 Status = a.Status,
                 Reason = a.Reason,
-                Notes = a.Notes
+                Notes = a.Notes,
+                DesiredCriteria = a.DesiredCriteria,
+                RejectionReason = a.RejectionReason,
+                ChildGender = a.Child != null ? a.Child.Gender : null,
+                ChildHealthStatus = a.Child != null ? a.Child.HealthStatus : null,
+                ChildBackground = a.Child != null ? a.Child.Background : null,
+                ChildDOB = a.Child != null ? a.Child.DOB : null
             })
             .OrderByDescending(a => a.SubmitDate)
             .ToListAsync();
+
+        var childIds = list.Where(a => a.ChildId.HasValue).Select(a => a.ChildId!.Value).Distinct().ToList();
+        var avatars = await context.Attachments
+            .Where(a => childIds.Contains(a.TargetId) && a.TargetType == AttachmentTargetType.Child && a.FileType != null && a.FileType.StartsWith("image/"))
+            .ToDictionaryAsync(a => a.TargetId, a => a.FilePath);
+
+        foreach (var item in list)
+        {
+            if (item.ChildId.HasValue)
+            {
+                item.ChildAvatarUrl = avatars.GetValueOrDefault(item.ChildId.Value);
+            }
+        }
 
         return TypedResults.Ok(list);
     }

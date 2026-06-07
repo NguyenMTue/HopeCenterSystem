@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using backend.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using backend.Infrastructure.Data;
 namespace backend.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260606182837_AddIncidentStatusAndResolution")]
+    partial class AddIncidentStatusAndResolution
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -269,9 +272,6 @@ namespace backend.Infrastructure.Data.Migrations
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("DesiredCriteria")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<DateTimeOffset>("LastModified")
                         .HasColumnType("datetimeoffset");
 
@@ -447,42 +447,6 @@ namespace backend.Infrastructure.Data.Migrations
                     b.HasIndex("EmployeeId");
 
                     b.ToTable("CarePlans");
-                });
-
-            modelBuilder.Entity("backend.Domain.Entities.CarePlanSupply", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("CarePlanId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("Created")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid>("InventoryItemId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("LastModified")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("LastModifiedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CarePlanId");
-
-                    b.HasIndex("InventoryItemId");
-
-                    b.ToTable("CarePlanSupplies");
                 });
 
             modelBuilder.Entity("backend.Domain.Entities.Child", b =>
@@ -1379,25 +1343,6 @@ namespace backend.Infrastructure.Data.Migrations
                     b.Navigation("Employee");
                 });
 
-            modelBuilder.Entity("backend.Domain.Entities.CarePlanSupply", b =>
-                {
-                    b.HasOne("backend.Domain.Entities.CarePlan", "CarePlan")
-                        .WithMany("CarePlanSupplies")
-                        .HasForeignKey("CarePlanId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("backend.Domain.Entities.InventoryItem", "InventoryItem")
-                        .WithMany()
-                        .HasForeignKey("InventoryItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("CarePlan");
-
-                    b.Navigation("InventoryItem");
-                });
-
             modelBuilder.Entity("backend.Domain.Entities.Child", b =>
                 {
                     b.HasOne("backend.Domain.Entities.Room", "Room")
@@ -1598,8 +1543,6 @@ namespace backend.Infrastructure.Data.Migrations
             modelBuilder.Entity("backend.Domain.Entities.CarePlan", b =>
                 {
                     b.Navigation("CareLogs");
-
-                    b.Navigation("CarePlanSupplies");
                 });
 
             modelBuilder.Entity("backend.Domain.Entities.Child", b =>

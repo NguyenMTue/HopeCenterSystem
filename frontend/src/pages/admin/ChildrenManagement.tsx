@@ -4,7 +4,7 @@ import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined, EyeOutlined
 import dayjs from 'dayjs';
 // IMPORT hàm gọi API (Đảm bảo bạn đã tạo file childService.ts như hướng dẫn trước đó)
 // Tìm dòng import này ở đầu file
-import { getChildrenList, deleteChild } from '../../services/childService';
+import { getChildrenList, deleteChild, createChild, updateChild } from '../../services/childService';
 import apiClient from '../../services/apiClient';
 
 const { Title, Text } = Typography;
@@ -37,11 +37,10 @@ const ChildrenManagement: React.FC = () => {
       // (Bạn có thể điều chỉnh các con số này cho khớp với khai báo Enum ở Backend của bạn nhé)
       const getStatusText = (statusValue: number) => {
         switch(statusValue) {
-          case 0: return 'Mới tiếp nhận';
-          case 1: return 'Đang chăm sóc';
-          case 2: return 'Sẵn sàng nhận nuôi';
-          case 3: return 'Cần chăm sóc y tế';
-          case 4: return 'Đã được nhận nuôi';
+          case 0: return 'Đang bảo trợ';
+          case 1: return 'Đã được nhận nuôi';
+          case 2: return 'Đang nằm viện';
+          case 3: return 'Đã chuyển tuyến';
           default: return 'Không xác định';
         }
       };
@@ -55,7 +54,8 @@ const ChildrenManagement: React.FC = () => {
         gender: item.gender === 0 ? 'Nam' : item.gender === 1 ? 'Nữ' : 'Khác',
         admissionDate: item.admissionDate,
         status: getStatusText(item.status), // Dịch trạng thái
-        health: item.healthStatus
+        health: item.healthStatus,
+        avatarUrl: item.avatarUrl
       }));
 
       setData(formattedData);
@@ -112,32 +112,55 @@ const ChildrenManagement: React.FC = () => {
     }
   };
 
-  // 5. XỬ LÝ LƯU (Tạm thời vẫn giữ logic Frontend, bước sau sẽ nối API POST/PUT)
+  // 5. XỬ LÝ LƯU (Nối API POST/PUT xuống Backend)
   const handleSave = async () => {
     try {
       const values = await form.validateFields(); 
-      const formattedValues = {
-        ...values,
-        admissionDate: values.admissionDate.format('YYYY-MM-DD'), 
+      
+      // Map gender string to number
+      const genderMap: Record<string, number> = { 'Nam': 0, 'Nữ': 1, 'Khác': 2 };
+      const genderVal = genderMap[values.gender] !== undefined ? genderMap[values.gender] : 0;
+
+      // Map status string to number
+      const statusMap: Record<string, number> = {
+        'Đang bảo trợ': 0,
+        'Đã được nhận nuôi': 1,
+        'Đang nằm viện': 2,
+        'Đã chuyển tuyến': 3
+      };
+      const statusVal = statusMap[values.status] !== undefined ? statusMap[values.status] : 0;
+
+      const payload = {
+        fullName: values.name,
+        dob: editingChild?.dob || dayjs().subtract(Number(values.age), 'year').format('YYYY-MM-DD'),
+        gender: genderVal,
+        healthStatus: values.health || 'Khỏe mạnh',
+        background: editingChild?.background || 'Thông tin bảo mật',
+        roomId: editingChild?.roomId || null,
+        status: statusVal,
+        admissionDate: values.admissionDate.format('YYYY-MM-DDTHH:mm:ss.SSSZ'),
+        weight: editingChild?.weight || 15,
+        height: editingChild?.height || 100
       };
 
       if (editingChild) {
-        setData(data.map(item => item.id === editingChild.id ? { ...editingChild, ...formattedValues } : item));
-        message.success(`Đã cập nhật hồ sơ ${editingChild.code} thành công!`);
-      } else {
-        const newChild = {
-          id: Date.now().toString(), 
-          code: `TE${(data.length + 1).toString().padStart(3, '0')}`, 
-          ...formattedValues,
+        const updatePayload = {
+          id: editingChild.id,
+          ...payload
         };
-        setData([newChild, ...data]); 
-        message.success(`Đã thêm hồ sơ mới cho bé ${newChild.name} thành công!`);
+        await updateChild(editingChild.id, updatePayload);
+        message.success(`Đã cập nhật hồ sơ bé ${values.name} thành công!`);
+      } else {
+        await createChild(payload);
+        message.success(`Đã thêm hồ sơ mới cho bé ${values.name} thành công!`);
       }
 
       setIsModalOpen(false);
       setEditingChild(null);
+      fetchChildrenData(); // Tải lại danh sách từ Backend
     } catch (error) {
-      console.log('Validate Failed:', error);
+      console.error('Save Failed:', error);
+      message.error('Không thể lưu hồ sơ trẻ. Vui lòng kiểm tra lại!');
     }
   };
 
@@ -158,6 +181,19 @@ const handleDelete = async (id: string) => {
 
   // 7. CẤU HÌNH CỘT BẢNG
   const columns = [
+    {
+      title: 'Ảnh đại diện',
+      dataIndex: 'avatarUrl',
+      key: 'avatarUrl',
+      width: 100,
+      render: (url: string) => (
+        <img 
+          src={url || 'https://via.placeholder.com/150'} 
+          alt="Avatar" 
+          style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: '50%', border: '2px solid #f3f4f6' }} 
+        />
+      )
+    },
     { title: 'Mã hồ sơ', dataIndex: 'code', key: 'code', width: 100, render: (text: string) => <b>{text}</b> },
     { title: 'Họ và tên', dataIndex: 'name', key: 'name', render: (text: string) => <Text strong style={{ fontSize: 15 }}>{text}</Text> },
     { title: 'Tuổi', dataIndex: 'age', key: 'age', width: 70 },
@@ -169,7 +205,7 @@ const handleDelete = async (id: string) => {
       key: 'status',
       width: 160,
       render: (status: string) => {
-        let color = status === 'Sẵn sàng nhận nuôi' ? 'green' : status === 'Cần chăm sóc y tế' ? 'red' : 'blue';
+        let color = status === 'Đã được nhận nuôi' ? 'green' : status === 'Đang nằm viện' ? 'red' : status === 'Đã chuyển tuyến' ? 'orange' : 'blue';
         return <Tag color={color} style={{ fontWeight: 600, padding: '2px 10px', borderRadius: 6 }}>{status}</Tag>;
       },
     },
@@ -273,10 +309,10 @@ const handleDelete = async (id: string) => {
           </div>
           <Form.Item name="status" label="Trạng thái chăm sóc" rules={[{ required: true, message: 'Vui lòng chọn!' }]}>
             <Select placeholder="Chọn trạng thái">
-              <Option value="Đang chăm sóc">Đang chăm sóc</Option>
-              <Option value="Sẵn sàng nhận nuôi">Sẵn sàng nhận nuôi</Option>
-              <Option value="Cần chăm sóc y tế">Cần chăm sóc y tế</Option>
+              <Option value="Đang bảo trợ">Đang bảo trợ</Option>
               <Option value="Đã được nhận nuôi">Đã được nhận nuôi</Option>
+              <Option value="Đang nằm viện">Đang nằm viện</Option>
+              <Option value="Đã chuyển tuyến">Đã chuyển tuyến</Option>
             </Select>
           </Form.Item>
           <Form.Item name="health" label="Tình trạng sức khỏe">
@@ -296,6 +332,13 @@ const handleDelete = async (id: string) => {
       >
         {editingChild && (
           <div style={{ marginTop: 24, fontSize: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+              <img 
+                src={editingChild.avatarUrl || 'https://via.placeholder.com/150'} 
+                alt="Avatar" 
+                style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: '50%', border: '4px solid #f43f5e', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }} 
+              />
+            </div>
             <p><Text type="secondary">Họ và tên:</Text> <Text strong style={{ fontSize: 18 }}>{editingChild.name}</Text></p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <p><Text type="secondary">Giới tính:</Text> <Text strong>{editingChild.gender}</Text></p>

@@ -18,6 +18,7 @@ public class AdoptionApplication : BaseAuditableEntity
     public virtual Employee? Approver { get; set; }
     public string? Reason { get; set; } // Lý do xin nhận nuôi
     public string? Notes { get; set; }  // Ghi chú từ nhân viên hoặc người nhận nuôi
+    public string? DesiredCriteria { get; set; } // Tiêu chí mong muốn của người nhận nuôi (giới tính, độ tuổi, sức khỏe...)
     // Bổ sung vào phần danh sách liên kết
     public virtual ICollection<PostAdoptionFollowUp> FollowUps { get; set; } = new List<PostAdoptionFollowUp>();
 }
