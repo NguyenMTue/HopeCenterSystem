@@ -56,6 +56,8 @@ const AdminDashboard: React.FC = () => {
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [backupInfo, setBackupInfo] = useState<any>(null);
+  const [backupsList, setBackupsList] = useState<any[]>([]);
+  const [loadingBackups, setLoadingBackups] = useState(false);
 
   // 1. GET USER RECORDS
   const fetchUsers = async () => {
@@ -71,8 +73,22 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const fetchBackups = async () => {
+    setLoadingBackups(true);
+    try {
+      const response = await apiClient.get('/api/Admin/backups');
+      setBackupsList(response.data || []);
+    } catch (error) {
+      console.error(error);
+      message.error('Không thể tải danh sách bản sao lưu.');
+    } finally {
+      setLoadingBackups(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
+    fetchBackups();
   }, []);
 
   // 2. SEARCH LOGIC
@@ -181,6 +197,7 @@ const AdminDashboard: React.FC = () => {
       const response = await apiClient.post('/api/Admin/backup');
       setBackupInfo(response.data);
       message.success('Sao lưu dữ liệu thành công!');
+      fetchBackups();
     } catch (error: any) {
       console.error(error);
       message.error('Sao lưu cơ sở dữ liệu thất bại.');
@@ -190,15 +207,18 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  // 8. RESTORE DATABASE
-  const handleRestore = () => {
+  // 8. RESTORE DATABASE FROM SPECIFIC FILE
+  const handleRestoreFile = (fileName: string) => {
     confirm({
       title: 'XÁC NHẬN PHỤC HỒI CƠ SỞ DỮ LIỆU?',
       icon: <ExclamationCircleOutlined style={{ color: '#f59e0b' }} />,
       content: (
         <div>
           <Paragraph style={{ color: '#ef4444', fontWeight: 600 }}>
-            CẢNH BÁO: Toàn bộ dữ liệu hiện tại trong cơ sở dữ liệu sẽ bị ghi đè hoàn toàn bởi bản sao lưu cũ.
+            CẢNH BÁO: Toàn bộ dữ liệu hiện tại trong cơ sở dữ liệu sẽ bị ghi đè hoàn toàn bởi bản sao lưu:
+          </Paragraph>
+          <Paragraph strong style={{ wordBreak: 'break-all', color: '#1d4ed8' }}>
+            {fileName}
           </Paragraph>
           <Paragraph>
             Hệ thống sẽ bị ngắt kết nối tạm thời để thiết lập chế độ Đơn người dùng (Single User Mode) trong quá trình phục hồi.
@@ -212,14 +232,14 @@ const AdminDashboard: React.FC = () => {
         setIsRestoring(true);
         const hide = message.loading('Đang tiến hành phục hồi dữ liệu từ bản sao lưu...', 0);
         try {
-          await apiClient.post('/api/Admin/restore');
+          await apiClient.post('/api/Admin/restore', { backupFileName: fileName });
           message.success({ content: 'Phục hồi dữ liệu thành công! Hệ thống đã được tải lại.', duration: 5 });
           setTimeout(() => {
             window.location.reload();
           }, 2000);
         } catch (error: any) {
           console.error(error);
-          message.error('Phục hồi dữ liệu thất bại. Vui lòng kiểm tra log SQL Server.');
+          message.error(error.response?.data?.message || 'Phục hồi dữ liệu thất bại. Vui lòng kiểm tra log SQL Server.');
         } finally {
           hide();
           setIsRestoring(false);
@@ -357,6 +377,39 @@ const AdminDashboard: React.FC = () => {
     </div>
   );
 
+  // Backup Columns
+  const backupColumns = [
+    {
+      title: 'Tên bản sao lưu',
+      dataIndex: 'fileName',
+      key: 'fileName',
+      render: (text: string) => <Text strong style={{ fontSize: '13px', wordBreak: 'break-all', fontFamily: 'monospace' }}>{text}</Text>
+    },
+    {
+      title: 'Thời gian tạo',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      width: 180,
+      render: (text: string) => dayjs(text).format('DD/MM/YYYY HH:mm:ss')
+    },
+    {
+      title: 'Thao tác',
+      key: 'action',
+      width: 120,
+      render: (_: any, record: any) => (
+        <Button 
+          type="primary" 
+          danger 
+          size="small"
+          icon={<CloudDownloadOutlined />}
+          onClick={() => handleRestoreFile(record.fileName)}
+        >
+          Phục hồi
+        </Button>
+      )
+    }
+  ];
+
   // Settings & Backup Tab Content
   const settingsTab = (
     <div>
@@ -410,55 +463,45 @@ const AdminDashboard: React.FC = () => {
               </Space>
             }
             bordered={false}
-            style={{ height: '100%', borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: '1px solid #f1f5f9' }}
+            style={{ borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: '1px solid #f1f5f9' }}
           >
             <Space direction="vertical" size="middle" style={{ width: '100%' }}>
               <Paragraph style={{ color: '#64748b' }}>
-                Admin hệ thống chịu trách nhiệm quản lý an toàn dữ liệu. Bạn nên sao lưu dữ liệu trước khi thực hiện cập nhật hoặc phân quyền tài khoản.
+                Admin hệ thống chịu trách nhiệm quản lý an toàn dữ liệu. Bạn có thể tạo nhiều bản sao lưu khác nhau và khôi phục lại hệ thống tại bất kỳ thời điểm nào từ danh sách dưới đây.
               </Paragraph>
 
-              <div style={{ background: '#f8fafc', padding: 16, borderRadius: 8, border: '1px dashed #cbd5e1', marginBottom: 12 }}>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
-                  <HddOutlined style={{ fontSize: 24, color: '#f43f5e' }} />
-                  <div>
-                    <Text strong style={{ display: 'block' }}>File Sao Lưu Hiện Tại:</Text>
-                    <Text type="secondary" style={{ fontSize: '12px', wordBreak: 'break-all' }}>
-                      {backupInfo?.backupFile || 'Chưa thực hiện sao lưu thủ công trong phiên này.'}
-                    </Text>
-                  </div>
-                </div>
-                {backupInfo && (
-                  <Tag color="success" icon={<CheckCircleOutlined />}>Tạo lúc {dayjs().format('HH:mm:ss DD/MM/YYYY')}</Tag>
-                )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <Button 
+                  type="primary" 
+                  icon={<CloudUploadOutlined />} 
+                  onClick={handleBackup}
+                  loading={isBackingUp}
+                  style={{ background: '#0ea5e9', borderColor: '#0ea5e9', height: 40, borderRadius: 8, fontWeight: 600 }}
+                >
+                  Tạo bản sao lưu mới
+                </Button>
+                
+                <Button 
+                  type="default" 
+                  onClick={fetchBackups}
+                  loading={loadingBackups}
+                  style={{ height: 40, borderRadius: 8 }}
+                >
+                  Làm mới danh sách
+                </Button>
               </div>
 
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Button 
-                    type="primary" 
-                    icon={<CloudUploadOutlined />} 
-                    block 
-                    onClick={handleBackup}
-                    loading={isBackingUp}
-                    style={{ background: '#0ea5e9', borderColor: '#0ea5e9', height: 45, borderRadius: 8, fontWeight: 600 }}
-                  >
-                    Sao lưu ngay
-                  </Button>
-                </Col>
-                <Col span={12}>
-                  <Button 
-                    type="primary" 
-                    danger
-                    icon={<CloudDownloadOutlined />} 
-                    block 
-                    onClick={handleRestore}
-                    loading={isRestoring}
-                    style={{ height: 45, borderRadius: 8, fontWeight: 600 }}
-                  >
-                    Phục hồi dữ liệu
-                  </Button>
-                </Col>
-              </Row>
+              <Text strong style={{ fontSize: '15px', display: 'block', marginTop: 8 }}>Danh sách các bản sao lưu trên máy chủ:</Text>
+              
+              <Table 
+                dataSource={backupsList} 
+                columns={backupColumns} 
+                rowKey="fileName" 
+                loading={loadingBackups}
+                pagination={{ pageSize: 5 }}
+                size="small"
+                locale={{ emptyText: 'Chưa có bản sao lưu nào được lưu trữ trên máy chủ.' }}
+              />
             </Space>
           </Card>
         </Col>

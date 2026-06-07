@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -34,6 +35,8 @@ public class AdminController : IEndpointGroup
             .WithName("AdminBackupDatabase");
         groupBuilder.MapPost(RestoreDatabase, "restore")
             .WithName("AdminRestoreDatabase");
+        groupBuilder.MapGet(ListBackups, "backups")
+            .WithName("AdminListBackups");
     }
 
     public static async Task<IResult> GetUsers(UserManager<Account> userManager, IApplicationDbContext context)
@@ -301,6 +304,35 @@ public class AdminController : IEndpointGroup
         return TypedResults.NoContent();
     }
 
+    private static async Task<(string DirectoryPath, string DatabaseName, string DbFile)> GetDatabasePathsAsync(IApplicationDbContext context)
+    {
+        var connStr = context.Database.GetConnectionString();
+        var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connStr);
+        var databaseName = builder.InitialCatalog;
+
+        string? dbFile = null;
+        try
+        {
+            dbFile = await context.Database
+                .SqlQueryRaw<string>("SELECT physical_name AS Value FROM sys.database_files WHERE file_id = 1")
+                .FirstOrDefaultAsync(cancellationToken: default);
+        }
+        catch
+        {
+            dbFile = await context.Database
+                .SqlQueryRaw<string>("SELECT TOP 1 physical_name AS Value FROM sys.master_files WHERE database_id = DB_ID() AND file_id = 1")
+                .FirstOrDefaultAsync(cancellationToken: default);
+        }
+
+        if (string.IsNullOrEmpty(dbFile))
+        {
+            throw new InvalidOperationException("Không thể xác định đường dẫn lưu trữ của cơ sở dữ liệu.");
+        }
+
+        var directoryPath = (Path.GetDirectoryName(dbFile) ?? "").Replace('\\', '/');
+        return (directoryPath, databaseName, dbFile.Replace('\\', '/'));
+    }
+
     public static async Task<IResult> BackupDatabase(
         IApplicationDbContext context,
         IUser currentUser,
@@ -308,36 +340,12 @@ public class AdminController : IEndpointGroup
     {
         try
         {
-            var connStr = context.Database.GetConnectionString();
-            var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connStr);
-            var databaseName = builder.InitialCatalog;
+            var (directoryPath, databaseName, _) = await GetDatabasePathsAsync(context);
 
-            // Truy vấn đường dẫn vật lý thực tế của file .mdf từ hệ quản trị CSDL SQL Server
-            // Điều này đảm bảo đường dẫn backup luôn nằm trong filesystem mà SQL Server có quyền truy cập
-            // (kể cả khi SQL Server chạy trong Docker Container Linux còn Web chạy trên Host Windows)
-            string? dbFile = null;
-            try
-            {
-                dbFile = await context.Database
-                    .SqlQueryRaw<string>("SELECT physical_name AS Value FROM sys.database_files WHERE file_id = 1")
-                    .FirstOrDefaultAsync(cancellationToken: default);
-            }
-            catch
-            {
-                dbFile = await context.Database
-                    .SqlQueryRaw<string>("SELECT TOP 1 physical_name AS Value FROM sys.master_files WHERE database_id = DB_ID() AND file_id = 1")
-                    .FirstOrDefaultAsync(cancellationToken: default);
-            }
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+            var backupFileName = $"{databaseName}_{timestamp}.bak";
+            var backupPath = $"{directoryPath}/{backupFileName}";
 
-            if (string.IsNullOrEmpty(dbFile))
-            {
-                return TypedResults.BadRequest(new { message = "Không thể xác định đường dẫn lưu trữ của cơ sở dữ liệu." });
-            }
-
-            // Thay đổi đuôi file .mdf thành .bak để lưu file sao lưu vào cùng thư mục với dữ liệu gốc của DB
-            var backupPath = Path.ChangeExtension(dbFile, ".bak");
-
-            // Execute SQL backup using string interpolation since SQL Server BACKUP TO DISK does not support parameterized path variables
             var backupName = $"Backup of {databaseName} at {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}";
             var sql = $"BACKUP DATABASE [{databaseName}] TO DISK = '{backupPath.Replace("'", "''")}' WITH FORMAT, INIT, NAME = '{backupName.Replace("'", "''")}'";
 #pragma warning disable EF1002
@@ -346,10 +354,10 @@ public class AdminController : IEndpointGroup
 
             if (!string.IsNullOrEmpty(currentUser.Id) && Guid.TryParse(currentUser.Id, out Guid adminId))
             {
-                await logService.LogAsync(adminId, "Backup", "System", $"Thực hiện sao lưu cơ sở dữ liệu '{databaseName}' thành công tại đường dẫn {backupPath}");
+                await logService.LogAsync(adminId, "Backup", "System", $"Thực hiện sao lưu cơ sở dữ liệu '{databaseName}' thành công tại tên tệp {backupFileName}");
             }
 
-            return TypedResults.Ok(new { message = "Sao lưu dữ liệu thành công!", backupFile = backupPath });
+            return TypedResults.Ok(new { message = "Sao lưu dữ liệu thành công!", backupFile = backupFileName });
         }
         catch (Exception ex)
         {
@@ -357,40 +365,91 @@ public class AdminController : IEndpointGroup
         }
     }
 
+    public static async Task<IResult> ListBackups(IApplicationDbContext context)
+    {
+        try
+        {
+            var (directoryPath, databaseName, _) = await GetDatabasePathsAsync(context);
+
+            var connStr = context.Database.GetConnectionString();
+            var backupFiles = new List<object>();
+
+            using (var conn = new Microsoft.Data.SqlClient.SqlConnection(connStr))
+            {
+                await conn.OpenAsync();
+                var sql = $@"
+                    CREATE TABLE #BackupFiles (subdirectory nvarchar(512), depth int, [file] bit);
+                    INSERT INTO #BackupFiles
+                    EXEC master.sys.xp_dirtree '{directoryPath.Replace("'", "''")}', 1, 1;
+                    SELECT subdirectory FROM #BackupFiles WHERE [file] = 1 AND (subdirectory LIKE '{databaseName}_%.bak' OR subdirectory = '{databaseName}.bak') ORDER BY subdirectory DESC;
+                    DROP TABLE #BackupFiles;
+                ";
+
+                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(sql, conn))
+                using (var reader = await cmd.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        var fileName = reader.GetString(0);
+                        
+                        var createdAt = DateTime.UtcNow;
+                        var parts = Path.GetFileNameWithoutExtension(fileName).Split('_');
+                        if (parts.Length >= 3 && parts[parts.Length - 2].Length == 8 && parts[parts.Length - 1].Length == 6)
+                        {
+                            var dateStr = parts[parts.Length - 2];
+                            var timeStr = parts[parts.Length - 1];
+                            if (DateTime.TryParseExact($"{dateStr}_{timeStr}", "yyyyMMdd_HHmmss", null, DateTimeStyles.AssumeUniversal, out var parsedDate))
+                            {
+                                createdAt = parsedDate.ToLocalTime();
+                            }
+                        }
+
+                        backupFiles.Add(new
+                        {
+                            FileName = fileName,
+                            CreatedAt = createdAt,
+                            FilePath = $"{directoryPath}/{fileName}"
+                        });
+                    }
+                }
+            }
+
+            return TypedResults.Ok(backupFiles);
+        }
+        catch (Exception ex)
+        {
+            return TypedResults.BadRequest(new { message = $"Không thể tải danh sách sao lưu: {ex.Message}" });
+        }
+    }
+
     public static async Task<IResult> RestoreDatabase(
+        [FromBody] RestoreDatabaseRequest? request,
         IApplicationDbContext context,
         IUser currentUser,
         ISystemLogService logService)
     {
         try
         {
-            var connStr = context.Database.GetConnectionString();
-            var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connStr);
-            var databaseName = builder.InitialCatalog;
+            var (directoryPath, databaseName, _) = await GetDatabasePathsAsync(context);
+
+            var backupFileName = request?.BackupFileName;
+            if (string.IsNullOrEmpty(backupFileName))
+            {
+                return TypedResults.BadRequest(new { message = "Vui lòng chỉ định tệp sao lưu cần phục hồi." });
+            }
+
+            if (backupFileName.Contains("..") || backupFileName.Contains("/") || backupFileName.Contains("\\"))
+            {
+                return TypedResults.BadRequest(new { message = "Tên tệp sao lưu không hợp lệ." });
+            }
+
+            var backupPath = $"{directoryPath}/{backupFileName}";
 
             // Connect to master database to drop connections and restore
+            var connStr = context.Database.GetConnectionString();
+            var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connStr);
             builder.InitialCatalog = "master";
             var masterConnStr = builder.ConnectionString;
-
-            string? dbFile = null;
-            using (var conn = new Microsoft.Data.SqlClient.SqlConnection(masterConnStr))
-            {
-                await conn.OpenAsync();
-                var getPathSql = "SELECT physical_name FROM sys.master_files WHERE database_id = DB_ID(@DbName) AND file_id = 1";
-                using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(getPathSql, conn))
-                {
-                    cmd.Parameters.AddWithValue("@DbName", databaseName);
-                    var result = await cmd.ExecuteScalarAsync();
-                    dbFile = result?.ToString();
-                }
-            }
-
-            if (string.IsNullOrEmpty(dbFile))
-            {
-                return TypedResults.BadRequest(new { message = "Không thể xác định đường dẫn file sao lưu để phục hồi." });
-            }
-
-            var backupPath = Path.ChangeExtension(dbFile, ".bak");
 
             using (var conn = new Microsoft.Data.SqlClient.SqlConnection(masterConnStr))
             {
@@ -403,7 +462,7 @@ public class AdminController : IEndpointGroup
                     await cmd.ExecuteNonQueryAsync();
                 }
 
-                // Restore database using string interpolation since SQL Server RESTORE FROM DISK does not support parameterized path variables
+                // Restore database
                 var restoreSql = $"RESTORE DATABASE [{databaseName}] FROM DISK = '{backupPath.Replace("'", "''")}' WITH REPLACE;";
                 using (var cmd = new Microsoft.Data.SqlClient.SqlCommand(restoreSql, conn))
                 {
@@ -423,7 +482,7 @@ public class AdminController : IEndpointGroup
 
             if (!string.IsNullOrEmpty(currentUser.Id) && Guid.TryParse(currentUser.Id, out Guid adminId))
             {
-                await logService.LogAsync(adminId, "Restore", "System", $"Thực hiện phục hồi cơ sở dữ liệu '{databaseName}' từ bản sao lưu tại đường dẫn {backupPath}");
+                await logService.LogAsync(adminId, "Restore", "System", $"Thực hiện phục hồi cơ sở dữ liệu '{databaseName}' từ bản sao lưu tại tên tệp {backupFileName}");
             }
 
             return TypedResults.Ok(new { message = "Phục hồi dữ liệu thành công! Vui lòng tải lại trang." });
@@ -445,14 +504,18 @@ public class AdminController : IEndpointGroup
                     {
                         await cmd.ExecuteNonQueryAsync();
                     }
-                    // Clear all connection pools to force EF Core to open fresh connections instead of using severed ones
                     Microsoft.Data.SqlClient.SqlConnection.ClearAllPools();
                 }
             }
             catch { /* Bỏ qua nếu không thể đặt lại */ }
 
-            return TypedResults.Ok(new { message = $"Phục hồi dữ liệu thất bại: {ex.Message}" });
+            return TypedResults.BadRequest(new { message = $"Phục hồi dữ liệu thất bại: {ex.Message}" });
         }
+    }
+
+    public class RestoreDatabaseRequest
+    {
+        public string? BackupFileName { get; set; }
     }
 
     public class CreateUserRequest
