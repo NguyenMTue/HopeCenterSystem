@@ -29,5 +29,6 @@ public interface IApplicationDbContext
     DbSet<DailyCareTask> DailyCareTasks { get; }
     DbSet<Vaccination> Vaccinations { get; }
 
+    Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade Database { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

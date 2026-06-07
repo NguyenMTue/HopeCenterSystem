@@ -11,7 +11,9 @@ public class CarePlans : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
-        groupBuilder.RequireAuthorization();
+        groupBuilder.RequireAuthorization(policy => 
+            policy.RequireAssertion(context => 
+                !context.User.IsInRole("Administrator")));
         groupBuilder.MapGet(GetCarePlans, "");
         groupBuilder.MapPost(CreateCarePlan, "");
         groupBuilder.MapPut(UpdateCarePlan, "{id}");

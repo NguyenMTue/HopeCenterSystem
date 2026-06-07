@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.IO;
+using Microsoft.Data.SqlClient;
 
 namespace backend.Infrastructure.Data;
 
@@ -32,9 +33,82 @@ public class ApplicationDbContextInitialiser
         try
         {
             _logger.LogInformation("Đang kiểm tra và chạy Migration cho Database...");
-            
-            // Xóa toàn bộ Database (Chỉ áp dụng trong lúc Dev)
-            // await _context.Database.EnsureDeletedAsync();
+
+            // Tự động kiểm tra và tạo database thủ công trước để tránh lỗi timeout ALTER DATABASE của EF Core
+            var connStr = _context.Database.GetConnectionString();
+            if (!string.IsNullOrEmpty(connStr))
+            {
+                var builder = new SqlConnectionStringBuilder(connStr);
+                var databaseName = builder.InitialCatalog;
+
+                if (!string.IsNullOrEmpty(databaseName) && 
+                    !databaseName.Equals("master", StringComparison.OrdinalIgnoreCase) && 
+                    !databaseName.Equals("tempdb", StringComparison.OrdinalIgnoreCase))
+                {
+                    builder.InitialCatalog = "master";
+                    var masterConnStr = builder.ConnectionString;
+
+                    using (var conn = new SqlConnection(masterConnStr))
+                    {
+                        await conn.OpenAsync();
+
+                        // 1. Kiểm tra database tồn tại
+                        var checkDbSql = "SELECT database_id FROM sys.databases WHERE name = @DbName";
+                        object? dbId = null;
+                        using (var cmd = new SqlCommand(checkDbSql, conn))
+                        {
+                            cmd.Parameters.AddWithValue("@DbName", databaseName);
+                            dbId = await cmd.ExecuteScalarAsync();
+                        }
+
+                        if (dbId == null)
+                        {
+                            _logger.LogInformation("Cơ sở dữ liệu '{DbName}' chưa tồn tại. Tiến hành tạo thủ công...", databaseName);
+                            
+                            var createDbSql = $"CREATE DATABASE [{databaseName}]";
+                            using (var cmd = new SqlCommand(createDbSql, conn))
+                            {
+                                await cmd.ExecuteNonQueryAsync();
+                            }
+
+                            _logger.LogInformation("Đã tạo cơ sở dữ liệu '{DbName}'. Kích hoạt snapshot isolation...", databaseName);
+                            
+                            var enableSnapshotSql = $"ALTER DATABASE [{databaseName}] SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE";
+                            using (var cmd = new SqlCommand(enableSnapshotSql, conn))
+                            {
+                                await cmd.ExecuteNonQueryAsync();
+                            }
+                        }
+                        else
+                        {
+                            // Database đã tồn tại, kiểm tra xem READ_COMMITTED_SNAPSHOT đã bật chưa
+                            var checkSnapshotSql = "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = @DbName";
+                            bool isSnapshotOn = false;
+                            using (var cmd = new SqlCommand(checkSnapshotSql, conn))
+                            {
+                                cmd.Parameters.AddWithValue("@DbName", databaseName);
+                                var result = await cmd.ExecuteScalarAsync();
+                                isSnapshotOn = result != null && (bool)result;
+                            }
+
+                            if (!isSnapshotOn)
+                            {
+                                _logger.LogInformation("READ_COMMITTED_SNAPSHOT chưa được bật cho '{DbName}'. Tiến hành kích hoạt an toàn...", databaseName);
+                                
+                                var enableSnapshotSql = $@"
+                                    ALTER DATABASE [{databaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+                                    ALTER DATABASE [{databaseName}] SET READ_COMMITTED_SNAPSHOT ON;
+                                    ALTER DATABASE [{databaseName}] SET MULTI_USER;";
+                                
+                                using (var cmd = new SqlCommand(enableSnapshotSql, conn))
+                                {
+                                    await cmd.ExecuteNonQueryAsync();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             
             // Chạy Migration để tạo lại cấu trúc bảng mới nhất
             await _context.Database.MigrateAsync();
@@ -1098,28 +1172,28 @@ public class ApplicationDbContextInitialiser
         // ==========================================
         if (!_context.SystemLogs.Any())
         {
-            var adminAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "admin");
-            var directorAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "director");
-            var managerAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "manager1");
+            var adminAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "tue1@gmail.com");
+            var directorAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "tue2@gmail.com");
+            var managerAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "tue3");
 
             var logs = new List<SystemLog>();
 
             if (adminAcc != null)
             {
-                logs.Add(new SystemLog { AccountId = adminAcc.Id, Action = "Login", Module = "Auth", Details = "Admin đăng nhập hệ thống thành công.", Created = DateTime.UtcNow.AddHours(-2), IpAddress = "192.168.1.10" });
-                logs.Add(new SystemLog { AccountId = adminAcc.Id, Action = "Backup", Module = "System", Details = "Hệ thống tự động sao lưu dữ liệu định kỳ.", Created = DateTime.UtcNow.AddDays(-1), IpAddress = "127.0.0.1" });
+                logs.Add(new SystemLog { AccountId = adminAcc.Id, Action = "Login", Module = "Auth", Details = "Admin đăng nhập hệ thống thành công.", Timestamp = DateTime.UtcNow.AddHours(-2), IpAddress = "192.168.1.10" });
+                logs.Add(new SystemLog { AccountId = adminAcc.Id, Action = "Backup", Module = "System", Details = "Hệ thống tự động sao lưu dữ liệu định kỳ.", Timestamp = DateTime.UtcNow.AddDays(-1), IpAddress = "127.0.0.1" });
             }
 
             if (directorAcc != null)
             {
-                logs.Add(new SystemLog { AccountId = directorAcc.Id, Action = "Approve", Module = "Adoption", Details = "Giám đốc phê duyệt đơn nhận nuôi mã #AD-2024.", Created = DateTime.UtcNow.AddDays(-5), IpAddress = "192.168.1.15" });
-                logs.Add(new SystemLog { AccountId = directorAcc.Id, Action = "UpdateStatus", Module = "Children", Details = "Cập nhật trạng thái trẻ: Chuyển sang Đã được nhận nuôi.", Created = DateTime.UtcNow.AddDays(-5), IpAddress = "192.168.1.15" });
+                logs.Add(new SystemLog { AccountId = directorAcc.Id, Action = "Approve", Module = "Adoption", Details = "Giám đốc phê duyệt đơn nhận nuôi mã #AD-2024.", Timestamp = DateTime.UtcNow.AddDays(-5), IpAddress = "192.168.1.15" });
+                logs.Add(new SystemLog { AccountId = directorAcc.Id, Action = "UpdateStatus", Module = "Children", Details = "Cập nhật trạng thái trẻ: Chuyển sang Đã được nhận nuôi.", Timestamp = DateTime.UtcNow.AddDays(-5), IpAddress = "192.168.1.15" });
             }
 
             if (managerAcc != null)
             {
-                logs.Add(new SystemLog { AccountId = managerAcc.Id, Action = "Create", Module = "Inventory", Details = "Lập phiếu xuất kho cho nhu yếu phẩm tuần 2.", Created = DateTime.UtcNow.AddDays(-2), IpAddress = "192.168.1.20" });
-                logs.Add(new SystemLog { AccountId = managerAcc.Id, Action = "Assign", Module = "Task", Details = "Phân công nhiệm vụ tổng vệ sinh cho nhân viên.", Created = DateTime.UtcNow.AddDays(-3), IpAddress = "192.168.1.20" });
+                logs.Add(new SystemLog { AccountId = managerAcc.Id, Action = "Create", Module = "Inventory", Details = "Lập phiếu xuất kho cho nhu yếu phẩm tuần 2.", Timestamp = DateTime.UtcNow.AddDays(-2), IpAddress = "192.168.1.20" });
+                logs.Add(new SystemLog { AccountId = managerAcc.Id, Action = "Assign", Module = "Task", Details = "Phân công nhiệm vụ tổng vệ sinh cho nhân viên.", Timestamp = DateTime.UtcNow.AddDays(-3), IpAddress = "192.168.1.20" });
             }
 
             _context.SystemLogs.AddRange(logs);
@@ -1131,9 +1205,9 @@ public class ApplicationDbContextInitialiser
         // ==========================================
         if (!_context.Notifications.Any())
         {
-            var directorAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "director");
-            var managerAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "manager1");
-            var staffAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "staff1");
+            var directorAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "tue2@gmail.com");
+            var managerAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "tue3");
+            var staffAcc = await _context.Users.FirstOrDefaultAsync(a => a.UserName == "tue4");
 
             var notifications = new List<Notification>();
 

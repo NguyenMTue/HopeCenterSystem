@@ -19,6 +19,7 @@ import MedicineCabinetManagement from '../pages/admin/MedicineCabinetManagement'
 import AttendanceManagement from '../pages/admin/AttendanceManagement';
 import SuppliesRequestManagement from '../pages/admin/SuppliesRequestManagement';
 import ShiftDashboard from '../pages/admin/ShiftDashboard';
+import AdminDashboard from '../pages/admin/AdminDashboard';
 
 // Adopter/Donor Pages
 import AdoptionPortal from '../pages/Adoption/AdoptionPortal';
@@ -74,6 +75,7 @@ export const router = createBrowserRouter([
       // Chuyển hướng được xử lý động trong MainLayout dựa trên Role
       
       // Các module quản lý chính
+      { path: 'admin', element: <AdminDashboard /> },
       { path: 'children', element: <ChildrenManagement /> },
       { path: 'adoptions', element: <AdoptionManagement /> },
       { path: 'donations', element: <DonationManagement /> },

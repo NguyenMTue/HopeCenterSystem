@@ -14,7 +14,9 @@ public class AdoptionApplications : IEndpointGroup
 {
     public static void Map(RouteGroupBuilder groupBuilder)
     {
-        groupBuilder.RequireAuthorization();
+        groupBuilder.RequireAuthorization(policy => 
+            policy.RequireAssertion(context => 
+                !context.User.IsInRole("Administrator")));
         groupBuilder.MapGet(GetAdoptionApplications);
         groupBuilder.MapGet(GetMyAdoptionApplications, "my");
         groupBuilder.MapGet(GetAdoptionApplicationById, "{id}");
