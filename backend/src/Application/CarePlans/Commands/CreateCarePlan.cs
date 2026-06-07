@@ -1,4 +1,5 @@
 using backend.Application.Common.Interfaces;
+using backend.Application.Common.Exceptions;
 using backend.Domain.Entities;
 using backend.Domain.Enums;
 using MediatR;
@@ -21,10 +22,16 @@ public record CreateCarePlanCommand : IRequest<Guid>
     public List<CarePlanSupplyInput>? Supplies { get; init; }
 }
 
-public class CreateCarePlanCommandHandler(IApplicationDbContext context) : IRequestHandler<CreateCarePlanCommand, Guid>
+public class CreateCarePlanCommandHandler(IApplicationDbContext context, IUser user) : IRequestHandler<CreateCarePlanCommand, Guid>
 {
     public async Task<Guid> Handle(CreateCarePlanCommand request, CancellationToken cancellationToken)
     {
+        var isDirector = user.Roles?.Contains("Director") ?? false;
+        if (isDirector)
+        {
+            throw new ForbiddenAccessException();
+        }
+
         if (request.EmployeeId.HasValue)
         {
             var employee = await context.Employees.FindAsync(new object[] { request.EmployeeId.Value }, cancellationToken);
@@ -65,3 +72,4 @@ public class CreateCarePlanCommandHandler(IApplicationDbContext context) : IRequ
         return entity.Id;
     }
 }
+

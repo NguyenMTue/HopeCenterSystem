@@ -34,8 +34,8 @@ public class GetCarePlansQueryHandler(IApplicationDbContext context, IMapper map
                 .AsNoTracking()
                 .Include(t => t.CarePlanSupplies)
                 .ThenInclude(t => t.InventoryItem)
+                .OrderByDescending(t => t.Created)
                 .ProjectTo<CarePlanDto>(mapper.ConfigurationProvider)
-                .OrderByDescending(t => t.StartDate)
                 .ToListAsync(cancellationToken)
         };
     }

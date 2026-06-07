@@ -52,7 +52,7 @@ public class GetChildrenQueryHandler(IApplicationDbContext context, IMapper mapp
         }
 
         var list = await query
-            .OrderBy(x => x.FullName)
+            .OrderByDescending(x => x.Created)
             .ProjectTo<ChildDto>(mapper.ConfigurationProvider)
             .PaginatedListAsync(request.PageNumber, request.PageSize);
 

@@ -31,7 +31,7 @@ public class GetEmployeesQueryHandler(IApplicationDbContext context, IMapper map
         }
 
         return await query
-            .OrderBy(e => e.FullName)
+            .OrderByDescending(e => e.Created)
             .ProjectTo<EmployeeDto>(mapper.ConfigurationProvider)
             .PaginatedListAsync(request.PageNumber, request.PageSize);
     }

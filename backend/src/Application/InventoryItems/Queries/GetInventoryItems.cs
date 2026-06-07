@@ -12,8 +12,8 @@ public class GetInventoryItemsQueryHandler(IApplicationDbContext context, IMappe
         {
             Lists = await context.InventoryItems
                 .AsNoTracking()
+                .OrderByDescending(t => t.Created)
                 .ProjectTo<InventoryItemDto>(mapper.ConfigurationProvider)
-                .OrderBy(t => t.ItemName)
                 .ToListAsync(cancellationToken)
         };
     }

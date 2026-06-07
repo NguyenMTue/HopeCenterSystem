@@ -15,10 +15,14 @@ const CarePlanManagement: React.FC = () => {
   const [children, setChildren] = useState<any[]>([]); // Danh sách bé để chọn
   const [employees, setEmployees] = useState<any[]>([]); // Danh sách nhân viên để chọn
   const [inventoryItems, setInventoryItems] = useState<any[]>([]); // Danh sách vật tư để chọn
+  const [userRoles, setUserRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<any>(null);
   const [form] = Form.useForm();
+
+  // Check role Director
+  const isDirector = userRoles.includes('Director');
 
   // 1. GỌI API LẤY DỮ LIỆU
   const fetchData = async () => {
@@ -62,6 +66,16 @@ const CarePlanManagement: React.FC = () => {
   };
 
   useEffect(() => {
+    const fetchUserRole = async () => {
+      try {
+        const response = await apiClient.get('/api/Users/me');
+        const roles = response.data.roles || [];
+        setUserRoles(roles);
+      } catch (error) {
+        console.error('Failed to fetch user roles', error);
+      }
+    };
+    fetchUserRole();
     fetchData();
   }, []);
 
@@ -195,24 +209,26 @@ const CarePlanManagement: React.FC = () => {
     <Card style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
         <Title level={2} style={{ margin: 0 }}><MedicineBoxOutlined /> Kế hoạch Chăm sóc</Title>
-        <Button 
-          type="primary" 
-          icon={<PlusOutlined />} 
-          onClick={() => {
-            setEditingPlan(null);
-            form.resetFields();
-            setIsModalOpen(true);
-          }} 
-          style={{ background: '#f43f5e', height: 40, borderRadius: 8 }}
-        >
-          Lập kế hoạch mới
-        </Button>
+        {!isDirector && (
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />} 
+            onClick={() => {
+              setEditingPlan(null);
+              form.resetFields();
+              setIsModalOpen(true);
+            }} 
+            style={{ background: '#f43f5e', height: 40, borderRadius: 8 }}
+          >
+            Lập kế hoạch mới
+          </Button>
+        )}
       </div>
 
       <Table columns={columns} dataSource={data} rowKey="id" bordered loading={loading} />
 
       <Modal 
-        title={editingPlan ? "Chỉnh sửa kế hoạch chăm sóc" : "Lập kế hoạch chăm sóc mới"} 
+        title={editingPlan ? (isDirector ? "Xem & Phê duyệt kế hoạch chăm sóc" : "Chỉnh sửa kế hoạch chăm sóc") : "Lập kế hoạch chăm sóc mới"} 
         open={isModalOpen} 
         onCancel={() => {
           setIsModalOpen(false);
@@ -221,12 +237,12 @@ const CarePlanManagement: React.FC = () => {
         onOk={() => form.submit()} 
         centered 
         width={650}
-        okText={editingPlan ? "Cập nhật" : "Lập kế hoạch"}
+        okText={editingPlan ? (isDirector ? "Phê duyệt" : "Cập nhật") : "Lập kế hoạch"}
         cancelText="Hủy"
       >
         <Form form={form} layout="vertical" onFinish={handleSave} style={{ marginTop: 20 }}>
           <Form.Item name="childId" label="Chọn trẻ em" rules={[{ required: true, message: 'Vui lòng chọn trẻ em!' }]}>
-            <Select placeholder="Chọn trẻ em từ danh sách" showSearch optionFilterProp="label" disabled={!!editingPlan}>
+            <Select placeholder="Chọn trẻ em từ danh sách" showSearch optionFilterProp="label" disabled={!!editingPlan || isDirector}>
               {children.map(child => (
                 <Select.Option key={child.id} value={child.id} label={child.fullName}>
                   {child.fullName}
@@ -236,15 +252,15 @@ const CarePlanManagement: React.FC = () => {
           </Form.Item>
           
           <Form.Item name="title" label="Tiêu đề kế hoạch" rules={[{ required: true, message: 'Vui lòng nhập tiêu đề kế hoạch!' }]}>
-            <Input placeholder="Ví dụ: Điều trị dứt điểm ho kéo dài" />
+            <Input placeholder="Ví dụ: Điều trị dứt điểm ho kéo dài" disabled={isDirector} />
           </Form.Item>
 
           <Form.Item name="dateRange" label="Thời gian thực hiện" rules={[{ required: true, message: 'Vui lòng chọn thời gian thực hiện!' }]}>
-            <DatePicker.RangePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+            <DatePicker.RangePicker style={{ width: '100%' }} format="DD/MM/YYYY" disabled={isDirector} />
           </Form.Item>
 
           <Form.Item name="employeeId" label="Nhân viên chăm sóc phụ trách (Chỉ hiển thị Caregiver)">
-            <Select placeholder="Chọn nhân viên từ danh sách" showSearch optionFilterProp="label" allowClear>
+            <Select placeholder="Chọn nhân viên từ danh sách" showSearch optionFilterProp="label" allowClear disabled={isDirector}>
               {caregiverEmployees.map(emp => (
                 <Select.Option key={emp.id} value={emp.id} label={emp.fullName}>
                   {emp.fullName} {emp.position ? `(${emp.position})` : ''}
@@ -265,7 +281,7 @@ const CarePlanManagement: React.FC = () => {
                         rules={[{ required: true, message: 'Chọn vật tư' }]}
                         style={{ margin: 0 }}
                       >
-                        <Select placeholder="Chọn vật tư" style={{ width: 350 }} showSearch optionFilterProp="label">
+                        <Select placeholder="Chọn vật tư" style={{ width: 350 }} showSearch optionFilterProp="label" disabled={isDirector}>
                           {inventoryItems.map(item => (
                             <Select.Option key={item.id} value={item.id} label={item.itemName}>
                               {item.itemName} (Còn: {item.currentQuantity})
@@ -279,16 +295,20 @@ const CarePlanManagement: React.FC = () => {
                         rules={[{ required: true, message: 'Nhập số lượng' }]}
                         style={{ margin: 0 }}
                       >
-                        <InputNumber min={1} placeholder="SL" style={{ width: 100 }} />
+                        <InputNumber min={1} placeholder="SL" style={{ width: 100 }} disabled={isDirector} />
                       </Form.Item>
-                      <MinusCircleOutlined onClick={() => remove(name)} style={{ color: '#ef4444', fontSize: '18px', cursor: 'pointer' }} />
+                      {!isDirector && (
+                        <MinusCircleOutlined onClick={() => remove(name)} style={{ color: '#ef4444', fontSize: '18px', cursor: 'pointer' }} />
+                      )}
                     </Space>
                   ))}
-                  <Form.Item>
-                    <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
-                      Thêm vật tư cấp phát đi kèm
-                    </Button>
-                  </Form.Item>
+                  {!isDirector && (
+                    <Form.Item>
+                      <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                        Thêm vật tư cấp phát đi kèm
+                      </Button>
+                    </Form.Item>
+                  )}
                 </>
               )}
             </Form.List>

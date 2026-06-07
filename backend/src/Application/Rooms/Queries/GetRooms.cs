@@ -12,8 +12,8 @@ public class GetRoomsQueryHandler(IApplicationDbContext context, IMapper mapper)
         {
             Lists = await context.Rooms
                 .AsNoTracking()
+                .OrderByDescending(x => x.Created)
                 .ProjectTo<RoomDto>(mapper.ConfigurationProvider)
-                .OrderBy(x => x.RoomName)
                 .ToListAsync(cancellationToken)
         };
     }

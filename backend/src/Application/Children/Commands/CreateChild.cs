@@ -14,6 +14,7 @@ public record CreateChildCommand : IRequest<Guid>
     public DateTime AdmissionDate { get; init; }
     public double? Weight { get; init; }
     public double? Height { get; init; }
+    public string? AvatarUrl { get; init; }
 }
 
 public class CreateChildCommandValidator : AbstractValidator<CreateChildCommand>
@@ -38,7 +39,7 @@ public class CreateChildCommandHandler(IApplicationDbContext context) : IRequest
             HealthStatus = request.HealthStatus,
             Background = request.Background,
             RoomId = request.RoomId,
-            Status = request.Status,
+            Status = ChildStatus.PendingApproval, // Mặc định là Chờ phê duyệt (PendingApproval)
             AdmissionDate = request.AdmissionDate,
             Weight = request.Weight,
             Height = request.Height
@@ -48,6 +49,23 @@ public class CreateChildCommandHandler(IApplicationDbContext context) : IRequest
 
         await context.SaveChangesAsync(cancellationToken);
 
+        if (!string.IsNullOrEmpty(request.AvatarUrl))
+        {
+            var attachment = new Attachment
+            {
+                TargetId = entity.Id,
+                TargetType = AttachmentTargetType.Child,
+                FileName = $"Avatar_{entity.FullName.Replace(" ", "_")}.jpg",
+                FilePath = request.AvatarUrl,
+                FileType = "image/jpeg",
+                FileSize = 1024,
+                UploadedAt = DateTime.UtcNow
+            };
+            context.Attachments.Add(attachment);
+            await context.SaveChangesAsync(cancellationToken);
+        }
+
         return entity.Id;
     }
 }
+

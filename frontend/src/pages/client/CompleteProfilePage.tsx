@@ -162,7 +162,7 @@ const CompleteProfilePage: React.FC = () => {
               rules={[{ required: true, message: 'Vui lòng điền địa chỉ thường trú!' }]}
               style={{ gridColumn: 'span 2' }}
             >
-              <Input.TextArea prefix={<HomeOutlined style={{ color: '#94a3b8' }} />} placeholder="Địa chỉ cụ thể nơi sinh sống hiện tại" autoSize={{ minRows: 2, maxRows: 4 }} style={{ borderRadius: '8px' }} />
+              <Input.TextArea placeholder="Địa chỉ cụ thể nơi sinh sống hiện tại" autoSize={{ minRows: 2, maxRows: 4 }} style={{ borderRadius: '8px' }} />
             </Form.Item>
           </div>
 

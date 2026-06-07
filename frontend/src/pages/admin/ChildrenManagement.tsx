@@ -1,9 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Table, Button, Input, Space, Tag, Typography, Modal, Form, Select, DatePicker, message, Popconfirm } from 'antd';
-import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UserOutlined } from '@ant-design/icons';
+import { Table, Button, Input, Space, Tag, Typography, Modal, Form, Select, DatePicker, message, Popconfirm, Upload } from 'antd';
+import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UserOutlined, PictureOutlined, UploadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-// IMPORT hàm gọi API (Đảm bảo bạn đã tạo file childService.ts như hướng dẫn trước đó)
-// Tìm dòng import này ở đầu file
 import { getChildrenList, deleteChild, createChild, updateChild } from '../../services/childService';
 import apiClient from '../../services/apiClient';
 
@@ -12,48 +10,47 @@ const { Option } = Select;
 
 const ChildrenManagement: React.FC = () => {
   // 1. QUẢN LÝ STATES
-  const [data, setData] = useState<any[]>([]); // Khởi tạo mảng rỗng thay vì initialData
-  const [loading, setLoading] = useState(false); // Trạng thái đang tải dữ liệu
+  const [data, setData] = useState<any[]>([]); 
+  const [loading, setLoading] = useState(false); 
   const [isAdopter, setIsAdopter] = useState(false);
+  const [userRoles, setUserRoles] = useState<string[]>([]);
   const [searchText, setSearchText] = useState(''); 
   
   const [isModalOpen, setIsModalOpen] = useState(false); 
   const [isViewModalOpen, setIsViewModalOpen] = useState(false); 
   const [editingChild, setEditingChild] = useState<any>(null); 
   
+  const [uploading, setUploading] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string>('');
+
   const [form] = Form.useForm(); 
 
-// 2. GỌI API LẤY DỮ LIỆU TỪ BACKEND
+  // 2. GỌI API LẤY DỮ LIỆU TỪ BACKEND
   const fetchChildrenData = async () => {
     setLoading(true);
     try {
       const responseData = await getChildrenList();
-      
-      // Backend trả về PaginatedList { items: [], pageNumber: 1, totalPages: 1, ... }
-      // Do đó ta cần lấy trường .items
       const rawData = responseData.items || [];
       
-      // Hàm phụ để dịch trạng thái từ Số (Backend) sang Chữ (Frontend)
-      // (Bạn có thể điều chỉnh các con số này cho khớp với khai báo Enum ở Backend của bạn nhé)
       const getStatusText = (statusValue: number) => {
         switch(statusValue) {
           case 0: return 'Đang bảo trợ';
           case 1: return 'Đã được nhận nuôi';
           case 2: return 'Đang nằm viện';
           case 3: return 'Đã chuyển tuyến';
+          case 4: return 'Chờ phê duyệt';
           default: return 'Không xác định';
         }
       };
 
       const formattedData = rawData.map((item: any) => ({
-        id: item.id, // Dùng item.id theo đúng JSON trả về
-        code: item.id.substring(0, 8).toUpperCase(), // Cắt 8 ký tự đầu của ID làm mã hiển thị
+        id: item.id, 
+        code: item.id.substring(0, 8).toUpperCase(), 
         name: item.fullName,
         age: item.dob ? dayjs().diff(dayjs(item.dob), 'year') : 'N/A',
-        // Dịch giới tính: Giả sử 0 là Nam, 1 là Nữ
         gender: item.gender === 0 ? 'Nam' : item.gender === 1 ? 'Nữ' : 'Khác',
         admissionDate: item.admissionDate,
-        status: getStatusText(item.status), // Dịch trạng thái
+        status: getStatusText(item.status), 
         health: item.healthStatus,
         avatarUrl: item.avatarUrl
       }));
@@ -67,12 +64,12 @@ const ChildrenManagement: React.FC = () => {
     }
   };
 
-  // Tự động chạy hàm fetchChildrenData khi component vừa được render lần đầu
   useEffect(() => {
     const fetchUserRole = async () => {
       try {
         const response = await apiClient.get('/api/Users/me');
         const roles = response.data.roles || [];
+        setUserRoles(roles);
         if (roles.includes('Adopter')) {
           setIsAdopter(true);
         }
@@ -106,9 +103,48 @@ const ChildrenManagement: React.FC = () => {
       form.setFieldsValue({
         ...record,
         admissionDate: dayjs(record.admissionDate), 
+        avatarUrl: record.avatarUrl
       });
+      if (record.avatarUrl) {
+        const baseUrl = apiClient.defaults.baseURL || 'http://localhost:5176';
+        setPreviewImageUrl(record.avatarUrl.startsWith('http') ? record.avatarUrl : `${baseUrl}${record.avatarUrl}`);
+      } else {
+        setPreviewImageUrl('');
+      }
     } else {
       form.resetFields();
+      setPreviewImageUrl('');
+    }
+  };
+
+  // 4.5 XỬ LÝ UPLOAD FILE ẢNH
+  const handleCustomUpload = async (options: any) => {
+    const { file, onSuccess, onError } = options;
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    setUploading(true);
+    try {
+      const response = await apiClient.post('/api/Attachments/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      const filePath = response.data.filePath;
+      form.setFieldValue('avatarUrl', filePath);
+      
+      const baseUrl = apiClient.defaults.baseURL || 'http://localhost:5176';
+      setPreviewImageUrl(filePath.startsWith('http') ? filePath : `${baseUrl}${filePath}`);
+      
+      onSuccess("OK");
+      message.success("Tải ảnh lên thành công!");
+    } catch (err) {
+      console.error(err);
+      onError(err);
+      message.error("Tải ảnh lên thất bại!");
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -117,18 +153,20 @@ const ChildrenManagement: React.FC = () => {
     try {
       const values = await form.validateFields(); 
       
-      // Map gender string to number
       const genderMap: Record<string, number> = { 'Nam': 0, 'Nữ': 1, 'Khác': 2 };
       const genderVal = genderMap[values.gender] !== undefined ? genderMap[values.gender] : 0;
 
-      // Map status string to number
       const statusMap: Record<string, number> = {
         'Đang bảo trợ': 0,
         'Đã được nhận nuôi': 1,
         'Đang nằm viện': 2,
-        'Đã chuyển tuyến': 3
+        'Đã chuyển tuyến': 3,
+        'Chờ phê duyệt': 4
       };
-      const statusVal = statusMap[values.status] !== undefined ? statusMap[values.status] : 0;
+      
+      const statusVal = editingChild 
+        ? (statusMap[values.status] !== undefined ? statusMap[values.status] : 4)
+        : 4;
 
       const payload = {
         fullName: values.name,
@@ -140,7 +178,8 @@ const ChildrenManagement: React.FC = () => {
         status: statusVal,
         admissionDate: values.admissionDate.format('YYYY-MM-DDTHH:mm:ss.SSSZ'),
         weight: editingChild?.weight || 15,
-        height: editingChild?.height || 100
+        height: editingChild?.height || 100,
+        avatarUrl: values.avatarUrl || ''
       };
 
       if (editingChild) {
@@ -152,32 +191,59 @@ const ChildrenManagement: React.FC = () => {
         message.success(`Đã cập nhật hồ sơ bé ${values.name} thành công!`);
       } else {
         await createChild(payload);
-        message.success(`Đã thêm hồ sơ mới cho bé ${values.name} thành công!`);
+        message.success(`Đã thêm hồ sơ mới cho bé ${values.name} thành công và đang chờ Director phê duyệt!`);
       }
 
       setIsModalOpen(false);
       setEditingChild(null);
-      fetchChildrenData(); // Tải lại danh sách từ Backend
+      fetchChildrenData(); 
     } catch (error) {
       console.error('Save Failed:', error);
       message.error('Không thể lưu hồ sơ trẻ. Vui lòng kiểm tra lại!');
     }
   };
 
-  // 6. XỬ LÝ XÓA (Tạm thời giữ logic Frontend, bước sau sẽ nối API DELETE)
-// Nhớ thêm deleteChild vào phần import ở đầu file nhé
-const handleDelete = async (id: string) => {
+  // 5.5 XỬ LÝ PHÊ DUYỆT HỒ SƠ (Chỉ dành cho Director)
+  const handleApprove = async (record: any) => {
     try {
-        await deleteChild(id); // Gửi lệnh xóa xuống SQL Server
-        
-        // Sau khi DB xóa xong, mới cập nhật lại giao diện
-        setData(data.filter(item => item.id !== id)); 
-        message.success('Đã xóa hồ sơ khỏi hệ thống thành công!');
+      const response = await apiClient.get(`/api/Children/${record.id}`);
+      const childData = response.data;
+      
+      const payload = {
+        id: childData.id,
+        fullName: childData.fullName,
+        dob: childData.dob,
+        gender: childData.gender,
+        healthStatus: childData.healthStatus,
+        background: childData.background,
+        roomId: childData.roomId,
+        status: 0, 
+        admissionDate: childData.admissionDate,
+        weight: childData.weight,
+        height: childData.height,
+        avatarUrl: childData.avatarUrl
+      };
+      
+      await updateChild(record.id, payload);
+      message.success(`Đã phê duyệt hồ sơ bé ${record.name} thành công sang trạng thái Đang bảo trợ!`);
+      fetchChildrenData();
     } catch (error) {
-        message.error('Không thể xóa hồ sơ. Vui lòng thử lại!');
-        console.error(error);
+      console.error('Approval Failed:', error);
+      message.error('Không thể phê duyệt hồ sơ. Vui lòng thử lại!');
     }
-};
+  };
+
+  // 6. XỬ LÝ XÓA
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteChild(id); 
+      setData(data.filter(item => item.id !== id)); 
+      message.success('Đã xóa hồ sơ khỏi hệ thống thành công!');
+    } catch (error) {
+      message.error('Không thể xóa hồ sơ. Vui lòng thử lại!');
+      console.error(error);
+    }
+  };
 
   // 7. CẤU HÌNH CỘT BẢNG
   const columns = [
@@ -186,13 +252,17 @@ const handleDelete = async (id: string) => {
       dataIndex: 'avatarUrl',
       key: 'avatarUrl',
       width: 100,
-      render: (url: string) => (
-        <img 
-          src={url || 'https://via.placeholder.com/150'} 
-          alt="Avatar" 
-          style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: '50%', border: '2px solid #f3f4f6' }} 
-        />
-      )
+      render: (url: string) => {
+        const baseUrl = apiClient.defaults.baseURL || 'http://localhost:5176';
+        const displayUrl = url ? (url.startsWith('http') ? url : `${baseUrl}${url}`) : 'https://via.placeholder.com/150';
+        return (
+          <img 
+            src={displayUrl} 
+            alt="Avatar" 
+            style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: '50%', border: '2px solid #f3f4f6' }} 
+          />
+        );
+      }
     },
     { title: 'Mã hồ sơ', dataIndex: 'code', key: 'code', width: 100, render: (text: string) => <b>{text}</b> },
     { title: 'Họ và tên', dataIndex: 'name', key: 'name', render: (text: string) => <Text strong style={{ fontSize: 15 }}>{text}</Text> },
@@ -205,31 +275,53 @@ const handleDelete = async (id: string) => {
       key: 'status',
       width: 160,
       render: (status: string) => {
-        let color = status === 'Đã được nhận nuôi' ? 'green' : status === 'Đang nằm viện' ? 'red' : status === 'Đã chuyển tuyến' ? 'orange' : 'blue';
+        let color = 'blue';
+        if (status === 'Đã được nhận nuôi') color = 'green';
+        else if (status === 'Đang nằm viện') color = 'red';
+        else if (status === 'Đã chuyển tuyến') color = 'orange';
+        else if (status === 'Chờ phê duyệt') color = 'gold';
         return <Tag color={color} style={{ fontWeight: 600, padding: '2px 10px', borderRadius: 6 }}>{status}</Tag>;
       },
     },
     ...(!isAdopter ? [{
       title: 'Hành động',
       key: 'action',
-      width: 150,
+      width: 220,
       fixed: 'right' as const, 
-      render: (_: any, record: any) => (
-        <Space size="small">
-          <Button type="text" icon={<EyeOutlined />} style={{ color: '#10b981' }} onClick={() => handleView(record)} />
-          <Button type="text" icon={<EditOutlined />} style={{ color: '#3b82f6' }} onClick={() => openEditModal(record)} />
-          <Popconfirm
-            title="Xóa hồ sơ"
-            description={`Bạn có chắc chắn muốn xóa hồ sơ của bé ${record.name}?`}
-            onConfirm={() => handleDelete(record.id)}
-            okText="Xóa ngay"
-            cancelText="Hủy"
-            okButtonProps={{ danger: true }}
-          >
-            <Button type="text" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
-      ),
+      render: (_: any, record: any) => {
+        const isDirector = userRoles.includes('Director');
+        const isPending = record.status === 'Chờ phê duyệt';
+        return (
+          <Space size="small">
+            {isDirector && isPending && (
+              <Popconfirm
+                title="Phê duyệt hồ sơ"
+                description={`Bạn có chắc chắn muốn phê duyệt hồ sơ của bé ${record.name}?`}
+                onConfirm={() => handleApprove(record)}
+                okText="Phê duyệt"
+                cancelText="Hủy"
+                okButtonProps={{ style: { background: '#10b981' } }}
+              >
+                <Button type="primary" size="small" style={{ background: '#10b981', borderColor: '#10b981', fontWeight: 600 }}>
+                  Duyệt
+                </Button>
+              </Popconfirm>
+            )}
+            <Button type="text" icon={<EyeOutlined />} style={{ color: '#10b981' }} onClick={() => handleView(record)} />
+            <Button type="text" icon={<EditOutlined />} style={{ color: '#3b82f6' }} onClick={() => openEditModal(record)} />
+            <Popconfirm
+              title="Xóa hồ sơ"
+              description={`Bạn có chắc chắn muốn xóa hồ sơ của bé ${record.name}?`}
+              onConfirm={() => handleDelete(record.id)}
+              okText="Xóa ngay"
+              cancelText="Hủy"
+              okButtonProps={{ danger: true }}
+            >
+              <Button type="text" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          </Space>
+        );
+      },
     }] : [])
   ];
 
@@ -264,7 +356,7 @@ const handleDelete = async (id: string) => {
         />
       </div>
 
-      {/* BẢNG DỮ LIỆU - Thêm thuộc tính loading */}
+      {/* BẢNG DỮ LIỆU */}
       <Table 
         columns={columns} 
         dataSource={filteredData} 
@@ -307,14 +399,38 @@ const handleDelete = async (id: string) => {
               </Select>
             </Form.Item>
           </div>
-          <Form.Item name="status" label="Trạng thái chăm sóc" rules={[{ required: true, message: 'Vui lòng chọn!' }]}>
-            <Select placeholder="Chọn trạng thái">
-              <Option value="Đang bảo trợ">Đang bảo trợ</Option>
-              <Option value="Đã được nhận nuôi">Đã được nhận nuôi</Option>
-              <Option value="Đang nằm viện">Đang nằm viện</Option>
-              <Option value="Đã chuyển tuyến">Đã chuyển tuyến</Option>
-            </Select>
+          <Form.Item label="Ảnh đại diện của bé">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '16px' }}>
+              <img 
+                src={previewImageUrl || 'https://via.placeholder.com/150'} 
+                alt="Preview Avatar" 
+                style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: '50%', border: '2px solid #e2e8f0' }} 
+              />
+              <Upload
+                accept="image/*"
+                showUploadList={false}
+                customRequest={handleCustomUpload}
+              >
+                <Button icon={<UploadOutlined />} loading={uploading}>
+                  Chọn ảnh từ máy tính
+                </Button>
+              </Upload>
+            </div>
+            <Form.Item name="avatarUrl" noStyle>
+              <Input type="hidden" />
+            </Form.Item>
           </Form.Item>
+          {editingChild && (
+            <Form.Item name="status" label="Trạng thái chăm sóc" rules={[{ required: true, message: 'Vui lòng chọn!' }]}>
+              <Select placeholder="Chọn trạng thái">
+                <Option value="Đang bảo trợ">Đang bảo trợ</Option>
+                <Option value="Đã được nhận nuôi">Đã được nhận nuôi</Option>
+                <Option value="Đang nằm viện">Đang nằm viện</Option>
+                <Option value="Đã chuyển tuyến">Đã chuyển tuyến</Option>
+                <Option value="Chờ phê duyệt">Chờ phê duyệt</Option>
+              </Select>
+            </Form.Item>
+          )}
           <Form.Item name="health" label="Tình trạng sức khỏe">
             <Input.TextArea rows={3} placeholder="Mô tả tình trạng sức khỏe, bệnh lý (nếu có)..." />
           </Form.Item>
@@ -334,7 +450,7 @@ const handleDelete = async (id: string) => {
           <div style={{ marginTop: 24, fontSize: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
               <img 
-                src={editingChild.avatarUrl || 'https://via.placeholder.com/150'} 
+                src={editingChild.avatarUrl ? (editingChild.avatarUrl.startsWith('http') ? editingChild.avatarUrl : `${apiClient.defaults.baseURL || 'http://localhost:5176'}${editingChild.avatarUrl}`) : 'https://via.placeholder.com/150'} 
                 alt="Avatar" 
                 style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: '50%', border: '4px solid #f43f5e', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }} 
               />
@@ -344,7 +460,7 @@ const handleDelete = async (id: string) => {
               <p><Text type="secondary">Giới tính:</Text> <Text strong>{editingChild.gender}</Text></p>
               <p><Text type="secondary">Tuổi:</Text> <Text strong>{editingChild.age}</Text></p>
               <p><Text type="secondary">Ngày vào trung tâm:</Text> <Text strong>{editingChild.admissionDate ? dayjs(editingChild.admissionDate).format('DD/MM/YYYY') : 'N/A'}</Text></p>
-              <p><Text type="secondary">Trạng thái:</Text> <Tag color="blue">{editingChild.status}</Tag></p>
+              <p><Text type="secondary">Trạng thái:</Text> <Tag color={editingChild.status === 'Đã được nhận nuôi' ? 'green' : editingChild.status === 'Đang nằm viện' ? 'red' : editingChild.status === 'Đã chuyển tuyến' ? 'orange' : editingChild.status === 'Chờ phê duyệt' ? 'gold' : 'blue'}>{editingChild.status}</Tag></p>
             </div>
             <Divider style={{ margin: '12px 0' }} />
             <p><Text type="secondary">Tình trạng sức khỏe:</Text></p>
