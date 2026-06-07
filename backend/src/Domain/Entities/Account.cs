@@ -14,6 +14,7 @@ public class Account : IdentityUser<Guid>
     // Giữ các liên kết 1-1 tới thông tin chi tiết
     public virtual Employee? Employee { get; set; }
     public virtual Adopter? Adopter { get; set; }
+    public virtual Donor? Donor { get; set; }
 
     // Giữ các liên kết nghiệp vụ khác
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();

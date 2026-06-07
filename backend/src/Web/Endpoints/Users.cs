@@ -172,7 +172,8 @@ public class Users : IEndpointGroup
 
     public static async Task<IResult> CompleteProfile(
         [FromBody] CompleteProfileRequest request,
-        IApplicationDbContext context)
+        IApplicationDbContext context,
+        UserManager<Account> userManager)
     {
         var adopter = await context.Adopters
             .Include(a => a.Account)
@@ -180,7 +181,46 @@ public class Users : IEndpointGroup
             
         if (adopter == null)
         {
-            return TypedResults.BadRequest("Không tìm thấy hồ sơ người nhận nuôi tương ứng.");
+            var donor = await context.Donors
+                .Include(d => d.Account)
+                .FirstOrDefaultAsync(d => d.AccountId == request.AccountId);
+
+            if (donor != null)
+            {
+                donor.FullName = request.FullName;
+                donor.Address = request.Address;
+                donor.Phone = request.Phone;
+                if (donor.Account != null)
+                {
+                    donor.Account.PhoneNumber = request.Phone;
+                }
+                await context.SaveChangesAsync(default);
+                return TypedResults.Ok(new { message = "Cập nhật hồ sơ nhà tài trợ thành công!" });
+            }
+
+            // Nếu tài khoản có vai trò Donor nhưng chưa có bản ghi trong bảng Donors, tạo mới
+            var account = await userManager.FindByIdAsync(request.AccountId.ToString());
+            if (account != null)
+            {
+                var isDonor = await userManager.IsInRoleAsync(account, "Donor");
+                if (isDonor)
+                {
+                    donor = new Donor
+                    {
+                        AccountId = request.AccountId,
+                        FullName = request.FullName,
+                        Address = request.Address,
+                        Phone = request.Phone,
+                        Email = account.Email
+                    };
+                    context.Donors.Add(donor);
+                    account.PhoneNumber = request.Phone;
+                    await context.SaveChangesAsync(default);
+                    return TypedResults.Ok(new { message = "Tạo mới và cập nhật hồ sơ nhà tài trợ thành công!" });
+                }
+            }
+
+            return TypedResults.BadRequest("Không tìm thấy hồ sơ người nhận nuôi hoặc nhà tài trợ tương ứng.");
         }
 
         adopter.FullName = request.FullName;

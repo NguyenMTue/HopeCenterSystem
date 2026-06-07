@@ -17,7 +17,8 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   CalendarOutlined,
-  DashboardOutlined
+  DashboardOutlined,
+  HomeOutlined
 } from '@ant-design/icons';
 
 const { Header, Sider, Content } = Layout;
@@ -40,6 +41,8 @@ const MainLayout: React.FC = () => {
           const userRoles = response.data.roles || [];
           if (response.data.userType === 'Adopter') {
             navigate('/adopter-portal', { replace: true });
+          } else if (userRoles.includes('Donor')) {
+            navigate('/dashboard/donor-portal', { replace: true });
           } else if (userRoles.includes('CareGiver')) {
             navigate('/dashboard/checklist-sinh-hoat', { replace: true });
           } else {
@@ -181,6 +184,22 @@ const MainLayout: React.FC = () => {
             { key: '/dashboard/adopter-portal', icon: <HeartOutlined />, label: 'Cổng thông tin' },
             { key: '/dashboard/children', icon: <TeamOutlined />, label: 'Danh sách trẻ em' },
             { key: '/dashboard/profile', icon: <UserOutlined />, label: 'Hồ sơ cá nhân' },
+          ],
+        }
+      ];
+    }
+
+    // 6. Donor Workspace
+    if (roles.includes('Donor')) {
+      return [
+        {
+          key: 'group-donor',
+          type: 'group' as const,
+          label: 'NHÀ TÀI TRỢ',
+          children: [
+            { key: '/dashboard/donor-portal', icon: <HeartOutlined />, label: 'Cổng tài trợ' },
+            { key: '/dashboard/profile', icon: <UserOutlined />, label: 'Hồ sơ cá nhân' },
+            { key: '/', icon: <HomeOutlined />, label: 'Quay lại Trang chủ' },
           ],
         }
       ];

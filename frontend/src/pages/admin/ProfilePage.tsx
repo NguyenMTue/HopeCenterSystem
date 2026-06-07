@@ -85,7 +85,7 @@ const ProfilePage: React.FC = () => {
               <Title level={2} style={{ margin: 0, color: '#1e293b' }}>{user?.fullName || 'Người dùng'}</Title>
               <Space direction="vertical" size={0}>
                 <Text type="secondary" style={{ fontSize: 16 }}>
-                  {user?.position || (user?.userType === 'Employee' ? 'Nhân viên hệ thống' : 'Người nhận nuôi')}
+                  {user?.position || (user?.userType === 'Employee' ? 'Nhân viên hệ thống' : (user?.userType === 'Donor' ? 'Nhà tài trợ' : 'Người nhận nuôi'))}
                 </Text>
                 <Space split={<Divider type="vertical" />} style={{ marginTop: 4 }}>
                    <Text type="secondary"><IdcardOutlined /> {user?.userName}</Text>
@@ -140,8 +140,8 @@ const ProfilePage: React.FC = () => {
               </Space>
             </Descriptions.Item>
             <Descriptions.Item label={<Space><CalendarOutlined /> Loại tài khoản</Space>}>
-               <Tag color={user?.userType === 'Employee' ? 'gold' : 'cyan'} style={{ fontWeight: 500 }}>
-                  {user?.userType === 'Employee' ? 'NHÂN VIÊN' : 'NGƯỜI NHẬN NUÔI'}
+               <Tag color={user?.userType === 'Employee' ? 'gold' : (user?.userType === 'Donor' ? 'pink' : 'cyan')} style={{ fontWeight: 500 }}>
+                  {user?.userType === 'Employee' ? 'NHÂN VIÊN' : (user?.userType === 'Donor' ? 'NHÀ TÀI TRỢ' : 'NGƯỜI NHẬN NUÔI')}
                </Tag>
             </Descriptions.Item>
             {user?.address && (

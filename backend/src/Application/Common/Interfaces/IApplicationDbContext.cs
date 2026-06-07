@@ -10,6 +10,7 @@ public interface IApplicationDbContext
     DbSet<Room> Rooms { get; }
     DbSet<Employee> Employees { get; }
     DbSet<Adopter> Adopters { get; }
+    DbSet<Donor> Donors { get; }
     DbSet<Child> Children { get; }
     DbSet<MedicalRecord> MedicalRecords { get; }
     DbSet<CarePlan> CarePlans { get; }

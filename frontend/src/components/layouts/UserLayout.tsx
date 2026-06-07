@@ -58,6 +58,13 @@ const UserLayout: React.FC = () => {
         label: 'Cổng thông tin', 
         onClick: () => navigate('/adopter-portal') 
       }
+    ] : (userInfo?.userType === 'Donor' ? [
+      { 
+        key: 'portal', 
+        icon: <AppstoreOutlined />, 
+        label: 'Cổng tài trợ', 
+        onClick: () => navigate('/dashboard/donor-portal') 
+      }
     ] : [
       { 
         key: 'dashboard', 
@@ -65,7 +72,7 @@ const UserLayout: React.FC = () => {
         label: 'Quản trị hệ thống', 
         onClick: () => navigate('/dashboard') 
       }
-    ]),
+    ])),
     { type: 'divider' as const },
     { 
       key: 'logout', 
@@ -159,7 +166,9 @@ const UserLayout: React.FC = () => {
                   <Avatar style={{ backgroundColor: '#f43f5e' }} icon={<UserOutlined />} />
                   <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
                     <Text strong style={{ fontSize: '14px' }}>{userInfo.fullName}</Text>
-                    <Text type="secondary" style={{ fontSize: '12px' }}>{userInfo.userType === 'Employee' ? 'Nhân viên' : 'Người nhận nuôi'}</Text>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      {userInfo.userType === 'Employee' ? 'Nhân viên' : (userInfo.userType === 'Donor' ? 'Nhà tài trợ' : 'Người nhận nuôi')}
+                    </Text>
                   </div>
                 </Space>
               </Dropdown>

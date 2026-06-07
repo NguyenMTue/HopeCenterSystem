@@ -11,3 +11,8 @@ export const createDonation = async (data: any) => {
     const response = await apiClient.post('/api/Donations', data);
     return response.data;
 };
+
+export const updateDonation = async (id: string, data: { id: string; status: string }) => {
+    const response = await apiClient.put(`/api/Donations/${id}`, data);
+    return response.data;
+};

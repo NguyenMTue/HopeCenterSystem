@@ -20,8 +20,9 @@ import AttendanceManagement from '../pages/admin/AttendanceManagement';
 import SuppliesRequestManagement from '../pages/admin/SuppliesRequestManagement';
 import ShiftDashboard from '../pages/admin/ShiftDashboard';
 
-// Adopter Pages
+// Adopter/Donor Pages
 import AdoptionPortal from '../pages/Adoption/AdoptionPortal';
+import DonorPortal from '../pages/Donor/DonorPortal';
 
 // Client Pages
 import HomePage from '../pages/client/HomePage';
@@ -89,6 +90,7 @@ export const router = createBrowserRouter([
       { path: 'attendance', element: <AttendanceManagement /> },
       { path: 'checklist-sinh-hoat', element: <ShiftDashboard /> },
       { path: 'supplies-request', element: <SuppliesRequestManagement /> },
+      { path: 'donor-portal', element: <DonorPortal /> },
     ],
   },
 

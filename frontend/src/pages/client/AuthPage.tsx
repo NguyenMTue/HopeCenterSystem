@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Input, Button, Typography, message, Space } from 'antd';
+import { Card, Form, Input, Button, Typography, message, Space, Select } from 'antd';
 import { 
   UserOutlined, 
   LockOutlined, 
@@ -82,19 +82,21 @@ const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => {
     console.log('--- REGISTER ATTEMPT ---');
     console.log('Data being sent:', {
       email: values.email,
-      password: values.password
+      password: values.password,
+      roles: [values.role]
     });
     try {
       const response = await apiClient.post('/api/Users/register-custom', {
         email: values.email,
         password: values.password,
-        userName: values.email
+        userName: values.email,
+        roles: [values.role]
       });
 
       console.log('Register Success Response:', response.data);
       message.success('Đăng ký tài khoản thành công! Vui lòng hoàn tất thông tin cá nhân của bạn.');
       const accountId = response.data;
-      navigate(`/complete-profile?accountId=${accountId}`);
+      navigate(`/complete-profile?accountId=${accountId}&role=${values.role}`);
     } catch (error: any) {
       console.error('--- REGISTER ERROR ---');
       console.error('Error status:', error.response?.status);
@@ -180,7 +182,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => {
           </Form>
         ) : (
           /* ================= FORM ĐĂNG KÝ ================= */
-          <Form layout="vertical" onFinish={handleRegister} size="large">
+          <Form layout="vertical" onFinish={handleRegister} size="large" initialValues={{ role: 'Adopter' }}>
             <Form.Item 
               name="email" 
               label={<Text strong>Email *</Text>} 
@@ -200,9 +202,20 @@ const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => {
               <Input.Password prefix={<LockOutlined style={{ color: '#94a3b8' }} />} placeholder="Tạo mật khẩu an toàn" style={{ borderRadius: '8px' }} />
             </Form.Item>
 
+            <Form.Item 
+              name="role" 
+              label={<Text strong>Vai trò đăng ký *</Text>}
+              rules={[{ required: true, message: 'Vui lòng chọn vai trò!' }]}
+            >
+              <Select style={{ borderRadius: '8px' }}>
+                <Select.Option value="Adopter">Người Nhận Nuôi (Adopter)</Select.Option>
+                <Select.Option value="Donor">Nhà Tài Trợ (Donor)</Select.Option>
+              </Select>
+            </Form.Item>
+
             <Form.Item>
               <Button type="primary" htmlType="submit" loading={loading} block style={{ background: '#f43f5e', height: '45px', borderRadius: '8px', fontWeight: 700, fontSize: '16px', marginTop: '10px' }}>
-                Đăng Ký Adopter
+                Đăng Ký
               </Button>
             </Form.Item>
 

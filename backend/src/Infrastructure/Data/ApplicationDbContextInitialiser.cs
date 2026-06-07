@@ -31,10 +31,10 @@ public class ApplicationDbContextInitialiser
     {
         try
         {
-            _logger.LogWarning("Đang RESET Database... Toàn bộ dữ liệu cũ sẽ bị XÓA SẠCH!");
+            _logger.LogInformation("Đang kiểm tra và chạy Migration cho Database...");
             
             // Xóa toàn bộ Database (Chỉ áp dụng trong lúc Dev)
-            await _context.Database.EnsureDeletedAsync();
+            // await _context.Database.EnsureDeletedAsync();
             
             // Chạy Migration để tạo lại cấu trúc bảng mới nhất
             await _context.Database.MigrateAsync();
@@ -73,8 +73,9 @@ public class ApplicationDbContextInitialiser
             ("Administrator", "Quản trị hệ thống"), 
             ("Director", "Giám đốc trung tâm"), 
             ("Manager", "Quản lý phòng ban"), 
-            ("CareGiver", "Nhân viên chăm sóc"), 
-            ("Adopter", "Người nhận nuôi") 
+            ("CareGiver", "Nhân viên chăm sóc"),    
+            ("Adopter", "Người nhận nuôi"),
+            ("Donor", "Nhà tài trợ") 
         };
 
         foreach (var roleInfo in roles)

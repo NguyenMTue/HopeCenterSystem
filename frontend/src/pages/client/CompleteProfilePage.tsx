@@ -19,6 +19,7 @@ const CompleteProfilePage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const accountId = searchParams.get('accountId');
+  const role = searchParams.get('role');
 
   useEffect(() => {
     if (!accountId) {
@@ -85,33 +86,23 @@ const CompleteProfilePage: React.FC = () => {
         <div style={{ textAlign: 'center', marginBottom: '35px' }}>
           <HeartFilled style={{ fontSize: '40px', color: '#f43f5e', marginBottom: '16px' }} />
           <Title level={2} style={{ color: '#f43f5e', margin: 0 }}>
-            Hoàn Tất Hồ Sơ Người Nhận Nuôi
+            {role === 'Donor' ? 'Hoàn Tất Hồ Sơ Nhà Tài Trợ' : 'Hoàn Tất Hồ Sơ Người Nhận Nuôi'}
           </Title>
           <Paragraph style={{ color: '#64748b', marginTop: '8px' }}>
-            Vui lòng điền đầy đủ các thông tin bắt buộc bên dưới để trung tâm xác minh và kích hoạt tài khoản của bạn.
+            {role === 'Donor' 
+              ? 'Vui lòng điền đầy đủ thông tin liên hệ để bắt đầu thực hiện tài trợ và tải tài liệu.' 
+              : 'Vui lòng điền đầy đủ các thông tin bắt buộc bên dưới để trung tâm xác minh và kích hoạt tài khoản của bạn.'}
           </Paragraph>
         </div>
 
         <Form layout="vertical" onFinish={handleComplete} size="large">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <Form.Item 
               name="fullName" 
               label={<Text strong>Họ và Tên đầy đủ *</Text>} 
               rules={[{ required: true, message: 'Vui lòng nhập họ tên!' }]}
-              style={{ gridColumn: 'span 2' }}
             >
-              <Input prefix={<UserOutlined style={{ color: '#94a3b8' }} />} placeholder="Nhập đầy đủ họ tên theo CCCD" style={{ borderRadius: '8px' }} />
-            </Form.Item>
-
-            <Form.Item 
-              name="idCard" 
-              label={<Text strong>Số CCCD *</Text>} 
-              rules={[
-                { required: true, message: 'Vui lòng nhập số căn cước công dân!' },
-                { pattern: /^[0-9]{12}$/, message: 'Số CCCD phải gồm đúng 12 số!' }
-              ]}
-            >
-              <Input prefix={<IdcardOutlined style={{ color: '#94a3b8' }} />} placeholder="Nhập 12 số CCCD" style={{ borderRadius: '8px' }} />
+              <Input prefix={<UserOutlined style={{ color: '#94a3b8' }} />} placeholder={role === 'Donor' ? 'Nhập đầy đủ họ tên hoặc tên tổ chức' : 'Nhập đầy đủ họ tên theo CCCD'} style={{ borderRadius: '8px' }} />
             </Form.Item>
 
             <Form.Item 
@@ -122,45 +113,58 @@ const CompleteProfilePage: React.FC = () => {
               <Input prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder="Ví dụ: 0988xxxxxx" style={{ borderRadius: '8px' }} />
             </Form.Item>
 
-            <Form.Item 
-              name="maritalStatus" 
-              label={<Text strong>Tình trạng hôn nhân *</Text>} 
-              rules={[{ required: true, message: 'Vui lòng chọn tình trạng hôn nhân!' }]}
-            >
-              <Select placeholder="Chọn tình trạng hôn nhân" style={{ borderRadius: '8px' }}>
-                <Option value="Độc thân">Độc thân</Option>
-                <Option value="Đã kết hôn">Đã kết hôn</Option>
-                <Option value="Ly hôn">Ly hôn / Góa</Option>
-              </Select>
-            </Form.Item>
+            {role !== 'Donor' && (
+              <>
+                <Form.Item 
+                  name="idCard" 
+                  label={<Text strong>Số CCCD *</Text>} 
+                  rules={[
+                    { required: true, message: 'Vui lòng nhập số căn cước công dân!' },
+                    { pattern: /^[0-9]{12}$/, message: 'Số CCCD phải gồm đúng 12 số!' }
+                  ]}
+                >
+                  <Input prefix={<IdcardOutlined style={{ color: '#94a3b8' }} />} placeholder="Nhập 12 số CCCD" style={{ borderRadius: '8px' }} />
+                </Form.Item>
 
-            <Form.Item 
-              name="incomeScope" 
-              label={<Text strong>Mức thu nhập bình quân hằng tháng *</Text>} 
-              rules={[{ required: true, message: 'Vui lòng chọn phạm vi thu nhập!' }]}
-            >
-              <Select placeholder="Chọn phạm vi thu nhập" style={{ borderRadius: '8px' }}>
-                <Option value="Dưới 15 triệu VNĐ">Dưới 15 triệu VNĐ</Option>
-                <Option value="Từ 15 đến 30 triệu VNĐ">Từ 15 - 30 triệu VNĐ</Option>
-                <Option value="Từ 30 đến 50 triệu VNĐ">Từ 30 - 50 triệu VNĐ</Option>
-                <Option value="Trên 50 triệu VNĐ">Trên 50 triệu VNĐ</Option>
-              </Select>
-            </Form.Item>
+                <Form.Item 
+                  name="maritalStatus" 
+                  label={<Text strong>Tình trạng hôn nhân *</Text>} 
+                  rules={[{ required: true, message: 'Vui lòng chọn tình trạng hôn nhân!' }]}
+                >
+                  <Select placeholder="Chọn tình trạng hôn nhân" style={{ borderRadius: '8px' }}>
+                    <Option value="Độc thân">Độc thân</Option>
+                    <Option value="Đã kết hôn">Đã kết hôn</Option>
+                    <Option value="Ly hôn">Ly hôn / Góa</Option>
+                  </Select>
+                </Form.Item>
 
-            <Form.Item 
-              name="occupation" 
-              label={<Text strong>Nghề nghiệp chính *</Text>} 
-              rules={[{ required: true, message: 'Vui lòng điền nghề nghiệp!' }]}
-              style={{ gridColumn: 'span 2' }}
-            >
-              <Input placeholder="Ví dụ: Công chức, Giáo viên, Lập trình viên..." style={{ borderRadius: '8px' }} />
-            </Form.Item>
+                <Form.Item 
+                  name="incomeScope" 
+                  label={<Text strong>Mức thu nhập bình quân hằng tháng *</Text>} 
+                  rules={[{ required: true, message: 'Vui lòng chọn phạm vi thu nhập!' }]}
+                >
+                  <Select placeholder="Chọn phạm vi thu nhập" style={{ borderRadius: '8px' }}>
+                    <Option value="Dưới 15 triệu VNĐ">Dưới 15 triệu VNĐ</Option>
+                    <Option value="Từ 15 đến 30 triệu VNĐ">Từ 15 - 30 triệu VNĐ</Option>
+                    <Option value="Từ 30 đến 50 triệu VNĐ">Từ 30 - 50 triệu VNĐ</Option>
+                    <Option value="Trên 50 triệu VNĐ">Trên 50 triệu VNĐ</Option>
+                  </Select>
+                </Form.Item>
+
+                <Form.Item 
+                  name="occupation" 
+                  label={<Text strong>Nghề nghiệp chính *</Text>} 
+                  rules={[{ required: true, message: 'Vui lòng điền nghề nghiệp!' }]}
+                >
+                  <Input placeholder="Ví dụ: Công chức, Giáo viên, Lập trình viên..." style={{ borderRadius: '8px' }} />
+                </Form.Item>
+              </>
+            )}
 
             <Form.Item 
               name="address" 
-              label={<Text strong>Địa chỉ cư trú thường liên hệ *</Text>} 
+              label={<Text strong>Địa chỉ thường trú / liên hệ *</Text>} 
               rules={[{ required: true, message: 'Vui lòng điền địa chỉ thường trú!' }]}
-              style={{ gridColumn: 'span 2' }}
             >
               <Input.TextArea placeholder="Địa chỉ cụ thể nơi sinh sống hiện tại" autoSize={{ minRows: 2, maxRows: 4 }} style={{ borderRadius: '8px' }} />
             </Form.Item>
